@@ -6,6 +6,8 @@ from enum import Enum
 import openai
 import anthropic
 import httpx
+from database import get_database_service
+from embedding_service import get_embedding_service
 
 # Models and Enums
 class Provider(str, Enum):
@@ -21,7 +23,7 @@ class GenerateRequest(BaseModel):
     provider: Provider = Field(..., description="LLM provider to use")
     user_id: str = Field(..., description="User ID for authentication")
     api_key: str = Field(..., description="API key for the provider")
-    
+
     # Optional LLM parameters
     temperature: Optional[float] = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: Optional[int] = Field(1000, ge=1, le=8000, description="Maximum tokens to generate")
@@ -38,21 +40,23 @@ class GenerateResponse(BaseModel):
     model_used: str
     usage: dict
     user_id: str
+    cached: bool = False
+    similarity_score: Optional[float] = None
 
 
 # LLM Service Classes
 class LLMService:
     """Base class for LLM services."""
-    
+
     @staticmethod
     async def generate_openai(request: GenerateRequest) -> GenerateResponse:
         """Generate text using OpenAI API."""
         try:
             client = openai.AsyncOpenAI(api_key=request.api_key)
-            
+
             # Default model selection
             model = request.model or "gpt-4o"
-            
+
             response = await client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": request.prompt}],
@@ -62,7 +66,7 @@ class LLMService:
                 frequency_penalty=request.frequency_penalty,
                 presence_penalty=request.presence_penalty
             )
-            
+
             return GenerateResponse(
                 generated_text=response.choices[0].message.content,
                 provider="openai",
@@ -72,16 +76,16 @@ class LLMService:
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"OpenAI API error: {str(e)}")
-    
+
     @staticmethod
     async def generate_anthropic(request: GenerateRequest) -> GenerateResponse:
         """Generate text using Anthropic API."""
         try:
             client = anthropic.AsyncAnthropic(api_key=request.api_key)
-            
+
             # Default model selection
             model = request.model or "claude-3-haiku-20240307"
-            
+
             response = await client.messages.create(
                 model=model,
                 max_tokens=request.max_tokens,
@@ -89,17 +93,17 @@ class LLMService:
                 top_p=request.top_p,
                 messages=[{"role": "user", "content": request.prompt}]
             )
-            
+
             return GenerateResponse(
                 generated_text=response.content[0].text,
-                provider="anthropic", 
+                provider="anthropic",
                 model_used=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
                 user_id=request.user_id
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Anthropic API error: {str(e)}")
-    
+
     @staticmethod
     async def generate_xai(request: GenerateRequest) -> GenerateResponse:
         """Generate text using XAI API."""
@@ -110,10 +114,10 @@ class LLMService:
                     "Authorization": f"Bearer {request.api_key}",
                     "Content-Type": "application/json"
                 }
-                
+
                 # Default model selection - XAI models
                 model = request.model or "grok-3"
-                
+
                 payload = {
                     "model": model,
                     "messages": [{"role": "user", "content": request.prompt}],
@@ -124,35 +128,35 @@ class LLMService:
                     "presence_penalty": request.presence_penalty,
                     "stream": False
                 }
-                
+
                 response = await client.post(
                     "https://api.x.ai/v1/chat/completions",
                     headers=headers,
                     json=payload
                 )
-                
+
                 response_text = response.text
-                
+
                 if response.status_code != 200:
                     raise HTTPException(
-                        status_code=response.status_code, 
+                        status_code=response.status_code,
                         detail=f"XAI API error (status {response.status_code}): {response_text}"
                     )
-                
+
                 try:
                     data = response.json()
                 except Exception as json_error:
                     raise HTTPException(
-                        status_code=500, 
+                        status_code=500,
                         detail=f"Failed to parse XAI response as JSON: {json_error}. Response: {response_text}"
                     )
-                
+
                 if "choices" not in data or not data["choices"]:
                     raise HTTPException(
                         status_code=500,
                         detail=f"Invalid XAI response format: {data}"
                     )
-                
+
                 return GenerateResponse(
                     generated_text=data["choices"][0]["message"]["content"],
                     provider="xai",
@@ -188,31 +192,94 @@ async def health():
 @app.post("/api/generate", response_model=GenerateResponse)
 async def generate(request: GenerateRequest):
     """
-    Generate text using the specified LLM provider.
-    
+    Generate text using the specified LLM provider with embedding-based caching.
+
+    This endpoint:
+    1. Creates an embedding for the input prompt
+    2. Searches for similar prompts in the database
+    3. If a close match is found (similarity > 0.95), returns the cached response
+    4. If no close match, queries the LLM provider
+    5. Stores the new prompt, response, and embeddings in the database
+
     Args:
         request: Generation request with prompt, provider, and parameters
-        
+
     Returns:
-        Generated text with metadata
-        
+        Generated text with metadata, including cache status
+
     Raises:
         HTTPException: If generation fails or provider is unsupported
     """
     try:
+        # Get services
+        db_service = get_database_service()
+        embedding_service = get_embedding_service()
+
+        # Step 1: Generate embedding for the prompt
+        prompt_embedding = await embedding_service.generate_embedding(request.prompt)
+
+        # Step 2: Search for similar queries in database
+        similar_queries = db_service.find_similar_queries(
+            prompt_embedding=prompt_embedding,
+            similarity_threshold=0.7,  # Lower threshold for search
+            max_results=1
+        )
+
+        # Step 3: Check if we have a very close match (>95% similarity)
+        if similar_queries and similar_queries[0].similarity_score > 0.95:
+            # Return cached response
+            cached_query = similar_queries[0]
+            return GenerateResponse(
+                generated_text=cached_query.response,
+                provider=request.provider.value,
+                model_used="cached",
+                usage={"cached": True},
+                user_id=request.user_id,
+                cached=True,
+                similarity_score=cached_query.similarity_score
+            )
+
+        # Step 4: No close match found, query the LLM provider
+        llm_response = None
         match request.provider:
             case Provider.OPENAI:
-                return await LLMService.generate_openai(request)
+                llm_response = await LLMService.generate_openai(request)
             case Provider.ANTHROPIC:
-                return await LLMService.generate_anthropic(request)
+                llm_response = await LLMService.generate_anthropic(request)
             case Provider.XAI:
-                return await LLMService.generate_xai(request)
+                llm_response = await LLMService.generate_xai(request)
+
+        if llm_response is None:
+            raise HTTPException(status_code=500, detail="Failed to generate response")
+
+        # Step 5: Generate embedding for the response
+        response_embedding = await embedding_service.generate_embedding(llm_response.generated_text)
+
+        # Step 6: Store in database
+        db_service.store_query(
+            user_id=request.user_id,
+            prompt=request.prompt,
+            response=llm_response.generated_text,
+            prompt_embedding=prompt_embedding,
+            response_embedding=response_embedding
+        )
+
+        # Return the fresh response
+        return GenerateResponse(
+            generated_text=llm_response.generated_text,
+            provider=llm_response.provider,
+            model_used=llm_response.model_used,
+            usage=llm_response.usage,
+            user_id=llm_response.user_id,
+            cached=False,
+            similarity_score=None
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Generation failed: {str(e)}"
         )
 
