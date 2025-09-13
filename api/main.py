@@ -1,11 +1,26 @@
 """Simple FastAPI application."""
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from enum import Enum
 import openai
 import anthropic
 import httpx
+import os
+from supabase import create_client, Client
+import datetime
+from dotenv import load_dotenv
+load_dotenv()
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL", "")
+supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
+supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+# Security
+security = HTTPBearer()
 
 # Models and Enums
 class Provider(str, Enum):
@@ -19,8 +34,7 @@ class GenerateRequest(BaseModel):
     """Request model for text generation."""
     prompt: str = Field(..., description="The prompt to generate text from")
     provider: Provider = Field(..., description="LLM provider to use")
-    user_id: str = Field(..., description="User ID for authentication")
-    api_key: str = Field(..., description="API key for the provider")
+    provider_api_key: str = Field(..., description="API key for the LLM provider (OpenAI, Anthropic, or XAI)")
     
     # Optional LLM parameters
     temperature: Optional[float] = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
@@ -40,15 +54,47 @@ class GenerateResponse(BaseModel):
     user_id: str
 
 
+# Authentication functions
+async def verify_api_key(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
+    """Verify API key and return user ID."""
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase not configured")
+    
+    token = credentials.credentials
+    
+    try:
+        # Check if it's a PromptLens API key
+        print('trying')
+        if token.startswith('pl_'):
+            print('here')
+            print(supabase.table('user_api_keys'))
+            result = supabase.table('user_api_keys').select('user_id').eq('api_key', token).eq('is_active', True).single().execute()
+            print(result.data)
+            if result.data:
+                # Update last_used_at
+                supabase.table('user_api_keys').update({'last_used_at': datetime.datetime.utcnow().isoformat()}).eq('api_key', token).execute()
+                return result.data['user_id']       
+        
+        # Otherwise, try to verify as Supabase JWT
+        user = supabase.auth.get_user(token)
+        if user and user.user:
+            return user.user.id
+            
+    except Exception:
+        pass
+    
+    raise HTTPException(status_code=401, detail="Invalid API key")
+
+
 # LLM Service Classes
 class LLMService:
     """Base class for LLM services."""
     
     @staticmethod
-    async def generate_openai(request: GenerateRequest) -> GenerateResponse:
+    async def generate_openai(request: GenerateRequest, user_id: str) -> GenerateResponse:
         """Generate text using OpenAI API."""
         try:
-            client = openai.AsyncOpenAI(api_key=request.api_key)
+            client = openai.AsyncOpenAI(api_key=request.provider_api_key)
             
             # Default model selection
             model = request.model or "gpt-4o"
@@ -68,16 +114,16 @@ class LLMService:
                 provider="openai",
                 model_used=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
-                user_id=request.user_id
+                user_id=user_id
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"OpenAI API error: {str(e)}")
     
     @staticmethod
-    async def generate_anthropic(request: GenerateRequest) -> GenerateResponse:
+    async def generate_anthropic(request: GenerateRequest, user_id: str) -> GenerateResponse:
         """Generate text using Anthropic API."""
         try:
-            client = anthropic.AsyncAnthropic(api_key=request.api_key)
+            client = anthropic.AsyncAnthropic(api_key=request.provider_api_key)
             
             # Default model selection
             model = request.model or "claude-3-haiku-20240307"
@@ -95,19 +141,19 @@ class LLMService:
                 provider="anthropic", 
                 model_used=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
-                user_id=request.user_id
+                user_id=user_id
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Anthropic API error: {str(e)}")
     
     @staticmethod
-    async def generate_xai(request: GenerateRequest) -> GenerateResponse:
+    async def generate_xai(request: GenerateRequest, user_id: str) -> GenerateResponse:
         """Generate text using XAI API."""
         try:
             # XAI uses OpenAI-compatible API
             async with httpx.AsyncClient(timeout=30.0) as client:
                 headers = {
-                    "Authorization": f"Bearer {request.api_key}",
+                    "Authorization": f"Bearer {request.provider_api_key}",
                     "Content-Type": "application/json"
                 }
                 
@@ -158,7 +204,7 @@ class LLMService:
                     provider="xai",
                     model_used=data.get("model", model),
                     usage=data.get("usage", {}),
-                    user_id=request.user_id
+                    user_id=user_id
                 )
 
         except Exception as e:
@@ -167,9 +213,18 @@ class LLMService:
 
 # Create FastAPI app
 app = FastAPI(
-    title="Simple API",
+    title="PromptLens API",
     version="1.0.0",
-    description="A simple FastAPI template"
+    description="API for PromptLens - LLM Data Insights Platform"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -186,12 +241,13 @@ async def health():
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest):
+async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_key)):
     """
     Generate text using the specified LLM provider.
     
     Args:
         request: Generation request with prompt, provider, and parameters
+        user_id: Authenticated user ID from API key
         
     Returns:
         Generated text with metadata
@@ -202,11 +258,11 @@ async def generate(request: GenerateRequest):
     try:
         match request.provider:
             case Provider.OPENAI:
-                return await LLMService.generate_openai(request)
+                return await LLMService.generate_openai(request, user_id)
             case Provider.ANTHROPIC:
-                return await LLMService.generate_anthropic(request)
+                return await LLMService.generate_anthropic(request, user_id)
             case Provider.XAI:
-                return await LLMService.generate_xai(request)
+                return await LLMService.generate_xai(request, user_id)
 
     except HTTPException:
         raise
