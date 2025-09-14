@@ -39,12 +39,12 @@ export interface SavedVisualization {
   name: string
   description: string
   query: string
-  chart_type: "line" | "bar" | "pie" | "scatter" | "heatmap" | "timeline"
+  chart_type: "line" | "pie"
+  chart_data: any
   config: Record<string, any>
   created_by: string
   created_at: string
   updated_at: string
-  is_public: boolean
 }
 
 export interface VisualizationData {

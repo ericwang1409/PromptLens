@@ -6,14 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ChartContainer } from "@/components/charts/chart-container"
-import { mockSavedVisualizations } from "@/lib/mock-data"
-import { fetchDashboardData } from "@/lib/data-service"
+import { ChartPreview } from "@/components/charts/chart-preview"
+import { ViewVisualizationModal } from "@/components/view-visualization-modal"
+import { fetchDashboardData, fetchSavedVisualizations, deleteVisualization } from "@/lib/data-service"
+import { useAuth } from "@/lib/auth-context"
 import { Plus, TrendingUp, Users, MessageSquare, Clock, Star, BarChart3, Eye, Edit, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { ChatPrompt, ChatResponse, User } from "@/lib/types"
+import type { ChatPrompt, ChatResponse, User, SavedVisualization } from "@/lib/types"
 
 export function Dashboard() {
-  const [selectedVisualization, setSelectedVisualization] = useState<string | null>(null)
+  const { user } = useAuth()
+  const router = useRouter()
   const [dashboardData, setDashboardData] = useState<{
     prompts: ChatPrompt[]
     responses: ChatResponse[]
@@ -32,14 +36,21 @@ export function Dashboard() {
       dayNames: string[]
     }
   } | null>(null)
+  const [savedVisualizations, setSavedVisualizations] = useState<SavedVisualization[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [viewingVisualization, setViewingVisualization] = useState<SavedVisualization | null>(null)
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true)
       try {
-        const data = await fetchDashboardData()
+        const [data, visualizations] = await Promise.all([
+          fetchDashboardData(),
+          user ? fetchSavedVisualizations(user.id) : Promise.resolve([])
+        ])
         setDashboardData(data)
+        setSavedVisualizations(visualizations)
       } catch (error) {
         console.error('Error loading dashboard data:', error)
       } finally {
@@ -48,7 +59,26 @@ export function Dashboard() {
     }
 
     loadData()
-  }, [])
+  }, [user])
+
+  const handleDeleteVisualization = async (vizId: string) => {
+    if (!user || !confirm('Are you sure you want to delete this visualization?')) return
+
+    const success = await deleteVisualization(vizId, user.id)
+    if (success) {
+      setSavedVisualizations(prev => prev.filter(viz => viz.id !== vizId))
+    }
+  }
+
+  const handleViewVisualization = (viz: SavedVisualization) => {
+    setViewingVisualization(viz)
+    setViewModalOpen(true)
+  }
+
+  const handleRegenerate = (query: string) => {
+    // Navigate to visualize page with the query pre-filled
+    router.push(`/visualize?query=${encodeURIComponent(query)}`)
+  }
 
   // Use real data if available, otherwise show loading state
   const totalPrompts = dashboardData?.metrics.totalPrompts || 0
@@ -239,7 +269,7 @@ export function Dashboard() {
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Your saved charts and analysis views</p>
             </div>
-            <Button size="sm" className="gap-2">
+            <Button size="sm" className="gap-2" onClick={() => router.push('/visualize')}>
               <Plus className="w-4 h-4" />
               Create New
             </Button>
@@ -247,8 +277,12 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mockSavedVisualizations.map((viz) => (
-              <Card key={viz.id} className="hover:shadow-md transition-shadow cursor-pointer">
+            {savedVisualizations.map((viz) => (
+              <Card
+                key={viz.id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => handleViewVisualization(viz)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -257,7 +291,12 @@ export function Dashboard() {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <span className="sr-only">Open menu</span>
                           <div className="w-1 h-1 bg-current rounded-full"></div>
                           <div className="w-1 h-1 bg-current rounded-full"></div>
@@ -265,7 +304,10 @@ export function Dashboard() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2">
+                        <DropdownMenuItem
+                          className="gap-2"
+                          onClick={() => handleViewVisualization(viz)}
+                        >
                           <Eye className="w-4 h-4" />
                           View
                         </DropdownMenuItem>
@@ -273,7 +315,10 @@ export function Dashboard() {
                           <Edit className="w-4 h-4" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 text-destructive">
+                        <DropdownMenuItem
+                          className="gap-2 text-destructive"
+                          onClick={() => handleDeleteVisualization(viz.id)}
+                        >
                           <Trash2 className="w-4 h-4" />
                           Delete
                         </DropdownMenuItem>
@@ -284,8 +329,12 @@ export function Dashboard() {
                 <CardContent className="pt-0">
                   <div className="space-y-3">
                     {/* Chart Preview */}
-                    <div className="h-24 bg-gradient-to-br from-primary/5 to-chart-2/5 rounded-md flex items-center justify-center">
-                      <BarChart3 className="w-6 h-6 text-muted-foreground" />
+                    <div className="h-24 bg-gradient-to-br from-primary/5 to-chart-2/5 rounded-md p-2">
+                      <ChartPreview
+                        chartType={viz.chart_type}
+                        data={viz.chart_data || { labels: [], datasets: [] }}
+                        height={80}
+                      />
                     </div>
 
                     {/* Metadata */}
@@ -298,15 +347,6 @@ export function Dashboard() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {viz.is_public ? (
-                          <Badge variant="secondary" className="text-xs">
-                            Public
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs">
-                            Private
-                          </Badge>
-                        )}
                         <span className="text-xs text-muted-foreground">
                           by {dashboardData?.users.find((u) => u.id === viz.created_by)?.name || "GOON"}
                         </span>
@@ -323,7 +363,10 @@ export function Dashboard() {
             ))}
 
             {/* Add New Visualization Card */}
-            <Card className="border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer">
+            <Card
+              className="border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => router.push('/visualize')}
+            >
               <CardContent className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
                 <Plus className="w-8 h-8 text-muted-foreground mb-2" />
                 <h3 className="font-medium text-foreground mb-1">Create New Visualization</h3>
@@ -370,6 +413,14 @@ export function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* View Visualization Modal */}
+      <ViewVisualizationModal
+        isOpen={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        onRegenerate={handleRegenerate}
+        visualization={viewingVisualization}
+      />
     </div>
   )
 }

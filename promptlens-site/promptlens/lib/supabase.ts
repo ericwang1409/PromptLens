@@ -108,6 +108,44 @@ export type Database = {
           rating?: number
         }
       }
+      saved_visualizations: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          description?: string
+          query: string
+          chart_type: "line" | "pie"
+          chart_data: any
+          config: any
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          description?: string
+          query: string
+          chart_type: "line" | "pie"
+          chart_data: any
+          config?: any
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          description?: string
+          query?: string
+          chart_type?: "line" | "pie"
+          chart_data?: any
+          config?: any
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }

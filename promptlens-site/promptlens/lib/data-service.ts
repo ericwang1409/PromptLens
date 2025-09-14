@@ -1,9 +1,10 @@
 import { supabase } from './supabase'
 import type { Database } from './supabase'
-import type { ChatPrompt, ChatResponse, User } from './types'
+import type { ChatPrompt, ChatResponse, User, SavedVisualization } from './types'
 
 type QueryRow = Database['public']['Tables']['queries']['Row']
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
+type SavedVisualizationRow = Database['public']['Tables']['saved_visualizations']['Row']
 
 // Transform database query to ChatPrompt format
 function transformQueryToPrompt(query: QueryRow): ChatPrompt {
@@ -204,5 +205,122 @@ export async function fetchDashboardData(userId?: string) {
         dayNames: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
       }
     }
+  }
+}
+
+// Transform database row to SavedVisualization format
+function transformRowToVisualization(row: SavedVisualizationRow): SavedVisualization {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || '',
+    query: row.query,
+    chart_type: row.chart_type,
+    chart_data: row.chart_data,
+    config: row.config || {},
+    created_by: row.user_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  }
+}
+
+export async function fetchSavedVisualizations(userId: string): Promise<SavedVisualization[]> {
+  try {
+    const response = await fetch(`/api/visualizations?userId=${userId}`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error fetching visualizations:', data.error)
+      return []
+    }
+
+    return data.visualizations.map(transformRowToVisualization)
+  } catch (error) {
+    console.error('Error fetching visualizations:', error)
+    return []
+  }
+}
+
+export async function saveVisualization(
+  userId: string,
+  name: string,
+  query: string,
+  chartType: string,
+  chartData: any,
+  description?: string,
+  config?: any
+): Promise<SavedVisualization | null> {
+  try {
+    const response = await fetch('/api/visualizations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        name,
+        description,
+        query,
+        chartType,
+        chartData,
+        config
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error saving visualization:', data.error)
+      return null
+    }
+
+    return transformRowToVisualization(data.visualization)
+  } catch (error) {
+    console.error('Error saving visualization:', error)
+    return null
+  }
+}
+
+export async function updateVisualization(
+  id: string,
+  userId: string,
+  updates: { name?: string; description?: string }
+): Promise<SavedVisualization | null> {
+  try {
+    const response = await fetch(`/api/visualizations/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, ...updates })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error updating visualization:', data.error)
+      return null
+    }
+
+    return transformRowToVisualization(data.visualization)
+  } catch (error) {
+    console.error('Error updating visualization:', error)
+    return null
+  }
+}
+
+export async function deleteVisualization(id: string, userId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/visualizations/${id}?userId=${userId}`, {
+      method: 'DELETE'
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error deleting visualization:', data.error)
+      return false
+    }
+
+    return data.success
+  } catch (error) {
+    console.error('Error deleting visualization:', error)
+    return false
   }
 }
