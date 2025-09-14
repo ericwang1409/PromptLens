@@ -63,118 +63,39 @@ export function NaturalLanguageQuery() {
   ]
 
   const handleSubmit = async (queryText: string) => {
-    setIsLoading(true)
-    setQuery(queryText)
+    try {
+      setIsLoading(true)
+      setQuery(queryText)
 
-    // Simulate AI processing
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+      const res = await fetch('/api/visualize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: queryText })
+      })
 
-    // Mock response based on query content
-    let mockResult: QueryResult
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Failed to generate visualization')
 
-    if (queryText.toLowerCase().includes("daily") && queryText.toLowerCase().includes("volume")) {
-      mockResult = {
+      const next: QueryResult = {
         query: queryText,
-        interpretation: "Analyzing daily prompt submission patterns over the last 30 days",
-        chartType: "line",
-        data: {
-          labels: ["Sep 1", "Sep 5", "Sep 10", "Sep 15", "Sep 20", "Sep 25", "Sep 30"],
-          datasets: [
-            {
-              label: "Daily Prompts",
-              data: [12, 19, 15, 25, 22, 18, 28],
-              borderColor: "oklch(0.65 0.15 35)",
-              backgroundColor: "oklch(0.65 0.15 35 / 0.1)",
-              fill: true,
-            },
-          ],
-        },
-        insights: [
-          "Peak activity occurs mid-month with 25 prompts on Sep 15",
-          "30% increase in activity over the past week",
-          "Weekend activity is typically 40% lower than weekdays",
-        ],
+        interpretation: data.description || 'Generated visualization',
+        chartType: data.chartType,
+        data: data.data,
+        insights: []
       }
-    } else if (queryText.toLowerCase().includes("department")) {
-      mockResult = {
+
+      setResult(next)
+    } catch (e: any) {
+      setResult({
         query: queryText,
-        interpretation: "Comparing prompt usage across different departments",
-        chartType: "bar",
-        data: {
-          labels: ["Data Science", "Marketing", "Engineering", "Sales", "Support"],
-          datasets: [
-            {
-              label: "Prompts per User",
-              data: [8.5, 6.2, 12.1, 4.8, 7.3],
-              backgroundColor: [
-                "oklch(0.65 0.15 35)",
-                "oklch(0.55 0.12 200)",
-                "oklch(0.45 0.08 150)",
-                "oklch(0.7 0.1 60)",
-                "oklch(0.5 0.08 300)",
-              ],
-            },
-          ],
-        },
-        insights: [
-          "Engineering team has highest usage at 12.1 prompts per user",
-          "Sales team shows lowest engagement at 4.8 prompts per user",
-          "Data Science team shows consistent daily usage patterns",
-        ],
-      }
-    } else if (queryText.toLowerCase().includes("categories") || queryText.toLowerCase().includes("common")) {
-      mockResult = {
-        query: queryText,
-        interpretation: "Breaking down prompt distribution by category",
-        chartType: "pie",
-        data: {
-          labels: ["Analysis", "Technical", "Creative", "Question", "Other"],
-          datasets: [
-            {
-              data: [35, 28, 18, 12, 7],
-              backgroundColor: [
-                "oklch(0.65 0.15 35)",
-                "oklch(0.55 0.12 200)",
-                "oklch(0.45 0.08 150)",
-                "oklch(0.7 0.1 60)",
-                "oklch(0.5 0.08 300)",
-              ],
-            },
-          ],
-        },
-        insights: [
-          "Analysis prompts dominate at 35% of all submissions",
-          "Technical queries are second most common at 28%",
-          "Creative prompts show 15% growth month-over-month",
-        ],
-      }
-    } else {
-      mockResult = {
-        query: queryText,
-        interpretation: "Analyzing general data patterns and trends",
-        chartType: "line",
-        data: {
-          labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
-          datasets: [
-            {
-              label: "Activity Score",
-              data: [65, 78, 82, 91],
-              borderColor: "oklch(0.65 0.15 35)",
-              backgroundColor: "oklch(0.65 0.15 35 / 0.1)",
-              fill: true,
-            },
-          ],
-        },
-        insights: [
-          "Steady upward trend in user engagement",
-          "40% improvement in response quality this month",
-          "Average session duration increased by 25%",
-        ],
-      }
+        interpretation: e?.message || 'Failed to generate visualization',
+        chartType: 'line',
+        data: { labels: [], datasets: [] },
+        insights: []
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    setResult(mockResult)
-    setIsLoading(false)
   }
 
   const handleSuggestionClick = (suggestion: QuerySuggestion) => {

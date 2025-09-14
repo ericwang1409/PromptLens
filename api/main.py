@@ -269,8 +269,8 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
         db_service = get_database_service()
         embedding_service = get_embedding_service()
 
-        # Step 1: Generate embedding for the prompt
-        prompt_embedding = await embedding_service.generate_embedding(request.prompt)
+        # Step 1: Generate embedding for the prompt (LLM-extracted keywords)
+        prompt_embedding, prompt_keywords = await embedding_service.generate_keyword_embedding(request.prompt)
 
         # Step 2: Search for similar queries in database
         similar_queries = db_service.find_similar_queries(
@@ -287,8 +287,8 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
             # Use cached response but still store this query in database
             cached_query = similar_queries[0]
 
-            # Generate embedding for the cached response to store with this query
-            response_embedding = await embedding_service.generate_embedding(cached_query.response)
+            # Generate embedding for the cached response using keywords
+            response_embedding, response_keywords = await embedding_service.generate_keyword_embedding(cached_query.response)
 
             end_time = time.time()
             response_time_ms = int((end_time - start_time) * 1000)  # Convert to milliseconds
@@ -313,7 +313,11 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
                 generated_text=cached_query.response,
                 provider=request.provider.value,
                 model_used="cached",
-                usage={"cached": True},
+                usage={
+                    "cached": True,
+                    "prompt_keywords": prompt_keywords,
+                    "response_keywords": response_keywords,
+                },
                 user_id=user_id,
                 cached=True,
                 similarity_score=cached_query.similarity_score
@@ -347,8 +351,8 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
             if tokens_used == 0:
                 tokens_used = llm_response.usage.get('input_tokens', 0) + llm_response.usage.get('output_tokens', 0)
 
-        # Step 5: Generate embedding for the response
-        response_embedding = await embedding_service.generate_embedding(llm_response.generated_text)
+        # Step 5: Generate embedding for the response using keywords
+        response_embedding, response_keywords = await embedding_service.generate_keyword_embedding(llm_response.generated_text)
 
         # Step 6: Store in database
         db_service.store_query(
@@ -369,7 +373,11 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
             generated_text=llm_response.generated_text,
             provider=llm_response.provider,
             model_used=llm_response.model_used,
-            usage=llm_response.usage,
+            usage={
+                **(llm_response.usage or {}),
+                "prompt_keywords": prompt_keywords,
+                "response_keywords": response_keywords,
+            },
             user_id=llm_response.user_id,
             cached=False,
             similarity_score=None
