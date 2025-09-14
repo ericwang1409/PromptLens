@@ -227,8 +227,23 @@ async def generate(request: GenerateRequest):
 
         # Step 3: Check if we have a very close match (>95% similarity)
         if similar_queries and similar_queries[0].similarity_score > 0.95:
-            # Return cached response
+            # Use cached response but still store this query in database
             cached_query = similar_queries[0]
+
+            # Generate embedding for the cached response to store with this query
+            response_embedding = await embedding_service.generate_embedding(cached_query.response)
+
+            # Store this query in database even though we're using cached response
+            # Link it to the original cached query
+            db_service.store_query(
+                user_id=request.user_id,
+                prompt=request.prompt,
+                response=cached_query.response,
+                prompt_embedding=prompt_embedding,
+                response_embedding=response_embedding,
+                cached_query_id=cached_query.id
+            )
+
             return GenerateResponse(
                 generated_text=cached_query.response,
                 provider=request.provider.value,

@@ -35,16 +35,23 @@ class DatabaseService:
         prompt: str,
         response: str,
         prompt_embedding: List[float],
-        response_embedding: List[float]
+        response_embedding: List[float],
+        cached_query_id: str = None
     ) -> str:
         """Store a query with its embeddings in the database."""
-        result = self.supabase.table('queries').insert({
+        query_data = {
             'user_id': user_id,
             'prompt': prompt,
             'response': response,
             'prompt_embedding': prompt_embedding,
             'response_embedding': response_embedding
-        }).execute()
+        }
+
+        # Add cached_query_id if provided
+        if cached_query_id:
+            query_data['cached_query_id'] = cached_query_id
+
+        result = self.supabase.table('queries').insert(query_data).execute()
 
         return result.data[0]['id']
 
