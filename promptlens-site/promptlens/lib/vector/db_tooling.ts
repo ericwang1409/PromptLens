@@ -17,6 +17,7 @@ interface FetchParams {
   since?: Date;
   until?: Date;
   fields?: 'prompt' | 'response' | 'both';
+  userId?: string;
 }
 
 class DbTooling {
@@ -27,7 +28,7 @@ class DbTooling {
   }
 
   async fetchQueries(params: FetchParams = {}): Promise<QueryRecord[]> {
-    const { limit = 1000, since, until, fields = 'both' } = params;
+    const { limit = 1000, since, until, fields = 'both', userId } = params;
 
     const selectCols = [
       'id',
@@ -45,15 +46,16 @@ class DbTooling {
 
     if (since) q = q.gte('created_at', since.toISOString());
     if (until) q = q.lte('created_at', until.toISOString());
+    if (userId) q = q.eq('user_id', userId);
 
     const { data, error } = await q;
     if (error) throw new Error(`fetchQueries failed: ${error.message}`);
     return (data || []) as unknown as QueryRecord[];
   }
 
-  async aggregateKeywords(params: { since?: Date; until?: Date; limit?: number; perRecordDedup?: boolean } = {}): Promise<Array<{ keyword: string; count: number }>> {
+  async aggregateKeywords(params: { since?: Date; until?: Date; limit?: number; perRecordDedup?: boolean; userId?: string } = {}): Promise<Array<{ keyword: string; count: number }>> {
     // Default now counts repeats within a single record for extra context
-    const { since, until, limit = 100, perRecordDedup = false } = params;
+    const { since, until, limit = 100, perRecordDedup = false, userId } = params;
     let q = this.supabase
       .from('queries')
       .select('id, created_at, keywords')
@@ -62,6 +64,7 @@ class DbTooling {
 
     if (since) q = q.gte('created_at', since.toISOString());
     if (until) q = q.lte('created_at', until.toISOString());
+    if (userId) q = q.eq('user_id', userId);
 
     const { data, error } = await q;
     if (error) throw new Error(`aggregateKeywords fetch failed: ${error.message}`);

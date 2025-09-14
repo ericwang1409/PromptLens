@@ -49,10 +49,10 @@ class Agent {
     });
   }
 
-  async run(adminQuery: string, options?: { limit?: number; since?: Date; until?: Date }): Promise<AgentResult> {
+  async run(adminQuery: string, options?: { limit?: number; since?: Date; until?: Date; userId?: string }): Promise<AgentResult> {
     // const { graphType, usedField, keywords } = await this.decidePlan(adminQuery);
     // Aggregate historical keywords to use as planning context
-    const topKeywords = await this.db.aggregateKeywords({ since: options?.since, until: options?.until, limit: 50 });
+    const topKeywords = await this.db.aggregateKeywords({ since: options?.since, until: options?.until, limit: 50, userId: options?.userId });
     const contextKeywords = topKeywords.map(k => `${k.keyword} (${k.count})`).join(', ');
     const { graphType, usedField, keywords } = await this.decidePlan(`${adminQuery}\n\nContext keywords (top): ${contextKeywords}`);
 
@@ -62,6 +62,7 @@ class Agent {
       since: options?.since,
       until: options?.until,
       fields: usedField,
+      userId: options?.userId,
     });
 
     await this.db.ensureEmbeddings(records, this.embedder, usedField);
