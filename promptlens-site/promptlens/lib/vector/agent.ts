@@ -56,6 +56,8 @@ class Agent {
     const contextKeywords = topKeywords.map(k => `${k.keyword} (${k.count})`).join(', ');
     const { graphType, usedField, keywords } = await this.decidePlan(`${adminQuery}\n\nContext keywords (top): ${contextKeywords}`);
 
+    console.log("graphType", graphType)
+
     // 1) Fetch records (lightweight, only needed fields) and ensure embeddings
     const records = await this.db.fetchQueries({
       limit: options?.limit ?? 1000,
@@ -191,19 +193,21 @@ class Agent {
       'You refine search categories from candidate keywords (with frequencies).',
       originalPrompt ? `Original prompt: ${originalPrompt}` : 'Original prompt: (none)',
       originalKeywords.length ? `Original query keywords: ${originalKeywords.join(', ')}` : 'Original query keywords: (none)',
-      `Choose a set of categories similar to the original query keywords that the user has requested that very closely match the original prompt and the candidate distribution. Return ${maxKeywords} or less categories.`,
+      'If the original query keywords are empty, return an empty keywords list.',
+      `Otherwise, choose a set of categories similar to the original query keywords that the user has requested that very closely match the original prompt and the candidate distribution. Return ${maxKeywords} or less categories.`,
       'Return JSON: { "keywords": string[] }',
       '',
       'Candidate keywords (keyword (count)):',
       candidates.join(', ')
     ].join('\n');
 
-    console.log("prompt", prompt)
-
     try {
       const completion = await this.llm.invoke([{ role: 'user', content: prompt }] as any);
       const parsed = await parser.parse((completion?.content as string) || '');
       const set = new Set(parsed.keywords.map((k: string) => k.toLowerCase().trim()).filter(Boolean));
+
+      console.log("originalKeywords", originalKeywords)
+
       console.log("set", set)
       return Array.from(set).slice(0, maxKeywords);
     } catch {
@@ -223,8 +227,12 @@ class Agent {
     const prompt = [
       'You are a planner that creates a hierarchical keyword graph for semantic search.',
       'You are able to choose between pie and line graphs as graphType.',
+      'If you are working with any time series data, you should choose line as graphType.',
+      'Otherwise, you should choose pie as graphType.',
       'You are also able to choose between prompt and response as usedField.',
-      'Choose a set of categories that the user has requested to be visualized and populate the keywords list with the categories. If a number of categories is mentioned, choose that many categories. Otherwise, choose 5 or less categories.',
+      'Check if the user has requested any categories in the query.',
+      'If the user has requested categories, choose a set of categories that the user has requested to be visualized and populate the keywords list with the categories. If a number of categories is mentioned, choose that many categories. Otherwise, choose 5 or less categories.',
+      'If the user has not requested any categories (e.g. "visualize the data" or "show me daily prompt volume"), return an empty keywords list.',
       'You should not include the words prompt, prompts, response or responses in the graph.',
       `Admin query: "${query}"`,
       `Return JSON in this schema: ${parser.getFormatInstructions()}`
