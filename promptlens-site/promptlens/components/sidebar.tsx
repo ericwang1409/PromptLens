@@ -24,7 +24,7 @@ export function Sidebar() {
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <BarChart3 className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-sidebar-foreground">DataViz</span>
+          <span className="font-semibold text-sidebar-foreground">Prompt Lens</span>
         </div>
 
         <div className="relative">
