@@ -14,6 +14,7 @@
 - **Vector Similarity Search**: Uses embeddings to find similar conversations and responses
 - **Smart Caching**: Reuses similar responses to reduce API costs and improve response times
 - **Multi-LLM Support**: Works with OpenAI, Anthropic Claude, and XAI (Grok) models
+- **Reduce Repeated Requests** Automatically generate markdown files for commonly asked questions to reduce costs and environmental impact
 
 ### 📊 **2. Natural Language Data Visualization**
 - **Query in Plain English**: Ask questions like "Show me daily prompt volume trends" or "What are the most common user questions?"
