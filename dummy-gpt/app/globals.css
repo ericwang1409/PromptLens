@@ -4,74 +4,74 @@
 
 :root {
   /* Updated color scheme for chatbot interface */
-  --background: #f8fafc; /* Light gray background */
-  --foreground: #1f2937; /* Dark gray for primary text */
-  --card: #ffffff; /* White for chat bubbles */
-  --card-foreground: #1f2937; /* Text color within chat bubbles */
-  --popover: #ffffff; /* Background for dropdown menus */
-  --popover-foreground: #1f2937; /* Text color in dropdowns */
-  --primary: #374151; /* Primary color for header and footers */
-  --primary-foreground: #ffffff; /* Text color for primary elements */
-  --secondary: #6366f1; /* Accent color for buttons and highlights */
-  --secondary-foreground: #ffffff; /* Text color for buttons */
-  --muted: #f8fafc; /* Background for muted elements */
-  --muted-foreground: #4b5563; /* Text color for muted elements */
-  --accent: #6366f1; /* Accent color for interactive elements */
-  --accent-foreground: #ffffff; /* Text color for interactive elements */
-  --destructive: #c62828; /* Color for destructive actions */
-  --destructive-foreground: #ffffff; /* Text color for destructive actions */
-  --border: #e5e7eb; /* Light gray border color */
-  --input: #ffffff; /* Input fields background */
-  --ring: #6366f1; /* Color for focused elements */
-  --chart-1: #6366f1;
-  --chart-2: #4f46e5;
-  --chart-3: #3b82f6;
-  --chart-4: #22c55e;
-  --chart-5: #ef4444;
+  --background: 248 250 252; /* Light gray background */
+  --foreground: 31 41 55; /* Dark gray for primary text */
+  --card: 255 255 255; /* White for chat bubbles */
+  --card-foreground: 31 41 55; /* Text color within chat bubbles */
+  --popover: 255 255 255; /* Background for dropdown menus */
+  --popover-foreground: 31 41 55; /* Text color in dropdowns */
+  --primary: 55 65 81; /* Primary color for header and footers */
+  --primary-foreground: 255 255 255; /* Text color for primary elements */
+  --secondary: 99 102 241; /* Accent color for buttons and highlights */
+  --secondary-foreground: 255 255 255; /* Text color for buttons */
+  --muted: 248 250 252; /* Background for muted elements */
+  --muted-foreground: 75 85 99; /* Text color for muted elements */
+  --accent: 99 102 241; /* Accent color for interactive elements */
+  --accent-foreground: 255 255 255; /* Text color for interactive elements */
+  --destructive: 198 40 40; /* Color for destructive actions */
+  --destructive-foreground: 255 255 255; /* Text color for destructive actions */
+  --border: 229 231 235; /* Light gray border color */
+  --input: 255 255 255; /* Input fields background */
+  --ring: 99 102 241; /* Color for focused elements */
+  --chart-1: 99 102 241;
+  --chart-2: 79 70 229;
+  --chart-3: 59 130 246;
+  --chart-4: 34 197 94;
+  --chart-5: 239 68 68;
   --radius: 0.5rem; /* Rounded corners */
-  --sidebar: #f8fafc;
-  --sidebar-foreground: #1f2937;
-  --sidebar-primary: #374151;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #6366f1;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #e5e7eb;
-  --sidebar-ring: #6366f1;
+  --sidebar: 248 250 252;
+  --sidebar-foreground: 31 41 55;
+  --sidebar-primary: 55 65 81;
+  --sidebar-primary-foreground: 255 255 255;
+  --sidebar-accent: 99 102 241;
+  --sidebar-accent-foreground: 255 255 255;
+  --sidebar-border: 229 231 235;
+  --sidebar-ring: 99 102 241;
 }
 
 .dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
-  --card-foreground: #f1f5f9;
-  --popover: #1e293b;
-  --popover-foreground: #f1f5f9;
-  --primary: #f1f5f9;
-  --primary-foreground: #0f172a;
-  --secondary: #334155;
-  --secondary-foreground: #f1f5f9;
-  --muted: #334155;
-  --muted-foreground: #94a3b8;
-  --accent: #6366f1;
-  --accent-foreground: #f1f5f9;
-  --destructive: #ef4444;
-  --destructive-foreground: #f1f5f9;
-  --border: #334155;
-  --input: #1e293b;
-  --ring: #6366f1;
-  --chart-1: #6366f1;
-  --chart-2: #8b5cf6;
-  --chart-3: #06b6d4;
-  --chart-4: #10b981;
-  --chart-5: #f59e0b;
-  --sidebar: #1e293b;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #6366f1;
-  --sidebar-primary-foreground: #f1f5f9;
-  --sidebar-accent: #334155;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #334155;
-  --sidebar-ring: #6366f1;
+  --background: 15 23 42;
+  --foreground: 241 245 249;
+  --card: 30 41 59;
+  --card-foreground: 241 245 249;
+  --popover: 30 41 59;
+  --popover-foreground: 241 245 249;
+  --primary: 241 245 249;
+  --primary-foreground: 15 23 42;
+  --secondary: 51 65 85;
+  --secondary-foreground: 241 245 249;
+  --muted: 51 65 85;
+  --muted-foreground: 148 163 184;
+  --accent: 99 102 241;
+  --accent-foreground: 241 245 249;
+  --destructive: 239 68 68;
+  --destructive-foreground: 241 245 249;
+  --border: 51 65 85;
+  --input: 30 41 59;
+  --ring: 99 102 241;
+  --chart-1: 99 102 241;
+  --chart-2: 139 92 246;
+  --chart-3: 6 182 212;
+  --chart-4: 16 185 129;
+  --chart-5: 245 158 11;
+  --sidebar: 30 41 59;
+  --sidebar-foreground: 241 245 249;
+  --sidebar-primary: 99 102 241;
+  --sidebar-primary-foreground: 241 245 249;
+  --sidebar-accent: 51 65 85;
+  --sidebar-accent-foreground: 241 245 249;
+  --sidebar-border: 51 65 85;
+  --sidebar-ring: 99 102 241;
 }
 
 @theme inline {
