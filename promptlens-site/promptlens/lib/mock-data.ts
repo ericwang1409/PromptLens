@@ -122,6 +122,15 @@ export const mockSavedVisualizations: SavedVisualization[] = [
     description: "Track daily prompt submissions across all users",
     query: "Show me daily prompt volume for the last 30 days",
     chart_type: "line",
+    chart_data: {
+      labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      datasets: [{
+        label: "Prompts",
+        data: [45, 52, 38, 61, 47, 55, 43],
+        borderColor: "oklch(0.65 0.15 120)",
+        fill: false
+      }]
+    },
     config: {
       timeRange: "30d",
       groupBy: "day",
@@ -130,14 +139,26 @@ export const mockSavedVisualizations: SavedVisualization[] = [
     created_by: "1",
     created_at: "2024-09-01T10:00:00Z",
     updated_at: "2024-09-10T15:30:00Z",
-    is_public: true,
   },
   {
     id: "2",
     name: "User Engagement by Department",
     description: "Compare prompt activity across different departments",
     query: "Compare prompt usage by department",
-    chart_type: "bar",
+    chart_type: "pie",
+    chart_data: {
+      labels: ["Engineering", "Marketing", "Sales", "Support"],
+      datasets: [{
+        label: "Prompts by Department",
+        data: [120, 85, 65, 45],
+        backgroundColor: [
+          "oklch(0.65 0.15 120)",
+          "oklch(0.55 0.12 200)",
+          "oklch(0.45 0.08 150)",
+          "oklch(0.7 0.1 60)"
+        ]
+      }]
+    },
     config: {
       groupBy: "department",
       metric: "avg_prompts_per_user",
@@ -145,6 +166,5 @@ export const mockSavedVisualizations: SavedVisualization[] = [
     created_by: "3",
     created_at: "2024-08-15T14:20:00Z",
     updated_at: "2024-09-05T09:15:00Z",
-    is_public: false,
   },
 ]
