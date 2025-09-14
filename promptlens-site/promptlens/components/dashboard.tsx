@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ChartContainer } from "@/components/charts/chart-container"
 import { mockSavedVisualizations, mockPrompts, mockResponses, mockUsers } from "@/lib/mock-data"
@@ -11,6 +12,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 export function Dashboard() {
   const [selectedVisualization, setSelectedVisualization] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [generated, setGenerated] = useState<Array<{ id: string; title: string; description?: string; chartType: "line" | "bar" | "pie"; data: any }>>([])
+  const [loading, setLoading] = useState(false)
 
   // Calculate key metrics
   const totalPrompts = mockPrompts.length
@@ -82,6 +87,65 @@ export function Dashboard() {
       },
     },
   ]
+
+  function suggestTitle(q: string, type: string): string {
+    if (!q) return `Generated ${type} chart`
+    return q.length > 64 ? `${q.slice(0, 61)}...` : q
+  }
+
+  function mapAgentToChartData(type: 'line' | 'bar' | 'pie', payload: any) {
+    const colors = [
+      'oklch(0.65 0.15 35)',
+      'oklch(0.55 0.12 200)',
+      'oklch(0.45 0.08 150)',
+      'oklch(0.7 0.1 60)',
+      'oklch(0.5 0.08 300)'
+    ]
+
+    if (type === 'pie') {
+      const labels: string[] = (payload || []).map((d: any) => d.label)
+      const values: number[] = (payload || []).map((d: any) => d.count)
+      return {
+        labels,
+        datasets: [
+          {
+            label: 'Count',
+            data: values,
+            backgroundColor: colors
+          }
+        ]
+      }
+    }
+
+    if (type === 'line') {
+      const labels: string[] = (payload || []).map((d: any) => d.timestamp)
+      const seriesLabels = Array.from(new Set<string>((payload || []).flatMap((d: any) => d.series.map((s: any) => s.label))))
+      const datasets = seriesLabels.map((sLabel, idx) => ({
+        label: sLabel,
+        data: labels.map((ts: string) => {
+          const row = (payload || []).find((d: any) => d.timestamp === ts)
+          const match = row?.series.find((s: any) => s.label === sLabel)
+          return match?.count || 0
+        }),
+        borderColor: colors[idx % colors.length],
+        fill: true
+      }))
+      return { labels, datasets }
+    }
+
+    const labels: string[] = (payload || []).map((d: any) => d.group)
+    const seriesLabels = Array.from(new Set<string>((payload || []).flatMap((d: any) => d.series.map((s: any) => s.label))))
+    const datasets = seriesLabels.map((sLabel, idx) => ({
+      label: sLabel,
+      data: labels.map((g: string) => {
+        const row = (payload || []).find((d: any) => d.group === g)
+        const match = row?.series.find((s: any) => s.label === sLabel)
+        return match?.count || 0
+      }),
+      backgroundColor: colors[idx % colors.length]
+    }))
+    return { labels, datasets }
+  }
 
   return (
     <div className="space-y-6">
@@ -164,14 +228,69 @@ export function Dashboard() {
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Your saved charts and analysis views</p>
             </div>
-            <Button size="sm" className="gap-2">
-              <Plus className="w-4 h-4" />
-              Create New
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="gap-2" onClick={() => setOpen(o => !o)}>
+                <Plus className="w-4 h-4" />
+                {open ? 'Close' : 'Create New'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {open && (
+            <div className="mb-4 p-3 border rounded-md bg-muted/20">
+              <Textarea
+                placeholder="e.g., create a pie chart of the different types of bugs users are experiencing"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                rows={5}
+              />
+              <div className="mt-2 flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => { setQuery(""); setOpen(false); }}>Cancel</Button>
+                <Button
+                  onClick={async () => {
+                    if (!query.trim() || loading) return;
+                    setLoading(true)
+                    try {
+                      const res = await fetch('/api/visualize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) })
+                      const payload = await res.json()
+                      if (!res.ok) throw new Error(payload?.error || 'Failed to generate')
+                      setGenerated(prev => [{ id: crypto.randomUUID(), ...payload }, ...prev])
+                      setQuery("")
+                      setOpen(false)
+                    } catch (e) {
+                      console.error(e)
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                >
+                  {loading ? 'Generating…' : 'Generate'}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {generated.map((viz) => (
+              <Card key={viz.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-base font-medium line-clamp-1">{viz.title}</CardTitle>
+                      {viz.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{viz.description}</p>}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <ChartContainer
+                    title={viz.title}
+                    description={viz.description}
+                    chartType={viz.chartType}
+                    data={viz.data}
+                  />
+                </CardContent>
+              </Card>
+            ))}
             {mockSavedVisualizations.map((viz) => (
               <Card key={viz.id} className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardHeader className="pb-3">
