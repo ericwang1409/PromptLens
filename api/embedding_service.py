@@ -6,6 +6,7 @@ Adds LLM-based keyword extraction to reduce embedding cost and noise.
 import os
 from typing import List, Tuple
 import openai
+import anthropic
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -22,8 +23,11 @@ class EmbeddingService:
         )
         self.model = "text-embedding-3-small"
         self.dimensions = 1536
-        # Chat model used for keyword extraction
-        self.keyword_model = os.getenv("KEYWORD_MODEL", "gpt-4o-mini")
+        # Claude client for keyword extraction
+        self.claude_client = anthropic.AsyncAnthropic(
+            api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
+        self.keyword_model = os.getenv("KEYWORD_MODEL", "claude-3-haiku-20240307")
 
     async def generate_embedding(self, text: str) -> List[float]:
         """
@@ -52,7 +56,7 @@ class EmbeddingService:
 
     async def extract_keywords(self, text: str, max_keywords: int = 3) -> List[str]:
         """
-        Use an LLM to extract important keywords/phrases from text.
+        Use Claude to extract important keywords/phrases from text.
 
         Returns a list of 2-3 words (no punctuation), lowercased, unique.
         """
@@ -62,16 +66,16 @@ class EmbeddingService:
             "Return them as a JSON array of strings only."
         )
         try:
-            resp = await self.client.chat.completions.create(
+            resp = await self.claude_client.messages.create(
                 model=self.keyword_model,
-                messages=[
-                    {"role": "system", "content": "You extract salient keywords."},
-                    {"role": "user", "content": f"Text:\n{text}\n\n{prompt}"},
-                ],
-                temperature=0.2,
                 max_tokens=256,
+                temperature=0.2,
+                system="You extract salient keywords.",
+                messages=[
+                    {"role": "user", "content": f"Text:\n{text}\n\n{prompt}"}
+                ]
             )
-            content = resp.choices[0].message.content or "[]"
+            content = resp.content[0].text if resp.content else "[]"
             import json
             import re
 

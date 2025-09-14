@@ -29,14 +29,14 @@ class TestGenerateEndpoint:
         assert response.status_code == 200
         assert response.json() == {"message": "Hello from PromptLens!"}
 
-    @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY") or not os.getenv("PROMPTLENS_API_KEY"),
-                       reason="OPENAI_API_KEY or PROMPTLENS_API_KEY not set")
+    @pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY") or not os.getenv("PROMPTLENS_API_KEY"),
+                       reason="ANTHROPIC_API_KEY or PROMPTLENS_API_KEY not set")
     def test_real_openai_integration(self):
-        """Test with real OpenAI API key - integration test."""
+        """Test with real Anthropic API key - integration test."""
         request_data = {
-            "prompt": "hello how do you do chatgpt?",
-            "provider": "openai",
-            "api_key": os.getenv("OPENAI_API_KEY"),
+            "prompt": "hello how do you do claude?",
+            "provider": "anthropic",
+            "api_key": os.getenv("ANTHROPIC_API_KEY"),
             "temperature": 0.0,  # Low temperature for consistent results
             "max_tokens": 10
         }
@@ -52,7 +52,7 @@ class TestGenerateEndpoint:
         if response.status_code == 200:
             data = response.json()
             assert "generated_text" in data
-            assert data["provider"] == "openai"
+            assert data["provider"] == "anthropic"
             assert "user_id" in data
             assert "cached" in data
             assert "similarity_score" in data

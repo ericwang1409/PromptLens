@@ -30,7 +30,6 @@ export function Sidebar() {
       href: "/visualize",
     },
     { id: "saved", label: "Dashboard", icon: Bookmark, href: "/saved" },
-    { id: "users", label: "Users", icon: Users, href: "/users" },
   ];
 
   const handleSettingsClick = () => {
