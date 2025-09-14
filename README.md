@@ -12,7 +12,6 @@
 ### 🧠 **1. AI Chat Analytics**
 - **Conversation Tracking**: Records all AI prompts and responses with full metadata
 - **Vector Similarity Search**: Uses embeddings to find similar conversations and responses
-- **Novel NLP Approach**: Iteratively increases the amount of context the LLM has until accurate categorization is achieved
 - **Keyword Selection**: Algorithmically selected relevant keyword for fast context and accurate embeddings
 - **Smart Caching**: Reuses similar responses to reduce API costs and improve response times
 - **Multi-LLM Support**: Works with OpenAI, Anthropic Claude, and XAI (Grok) models
@@ -20,6 +19,7 @@
 
 ### 📊 **2. Natural Language Data Visualization**
 - **Query in Plain English**: Ask questions like "Show me daily prompt volume trends" or "What are the most common user questions?"
+- **Novel NLP Approach**: Iteratively increases the amount of context the LLM has until accurate categorization is achieved
 - **Automatic Chart Generation**: Converts natural language queries into interactive charts (line, bar, pie charts)
 - **Time Series Analysis**: Supports different granularities (daily, hourly, 30-minute, 15-minute intervals)
 - **Real-time Insights**: Provides instant visualizations of your AI usage patterns
