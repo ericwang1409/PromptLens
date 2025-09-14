@@ -306,7 +306,7 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
                 tokens_used=0,  # Cached responses use 0 tokens
                 response_time_ms=response_time_ms,  # Cached responses have minimal response time
                 rating=rating,
-                keywords=request.keywords
+                keywords=prompt_keywords  # Use LLM-extracted keywords from prompt
             )
 
             return GenerateResponse(
@@ -365,7 +365,7 @@ async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_k
             tokens_used=tokens_used,
             response_time_ms=response_time_ms,
             rating=rating,
-            keywords=request.keywords
+            keywords=prompt_keywords  # Use LLM-extracted keywords from prompt
         )
 
         # Return the fresh response

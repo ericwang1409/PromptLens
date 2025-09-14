@@ -50,15 +50,15 @@ class EmbeddingService:
         except Exception as e:
             raise Exception(f"Embedding generation failed: {str(e)}")
 
-    async def extract_keywords(self, text: str, max_keywords: int = 12) -> List[str]:
+    async def extract_keywords(self, text: str, max_keywords: int = 3) -> List[str]:
         """
         Use an LLM to extract important keywords/phrases from text.
 
-        Returns a list of 1-5 word phrases (no punctuation), lowercased, unique.
+        Returns a list of 2-3 words (no punctuation), lowercased, unique.
         """
         prompt = (
-            "Extract up to "
-            f"{max_keywords} concise keywords/phrases that best represent the content. "
+            "Extract AT MOST "
+            f"{max_keywords} concise keywords that best represent the content. "
             "Return them as a JSON array of strings only."
         )
         try:
@@ -72,20 +72,19 @@ class EmbeddingService:
                 max_tokens=256,
             )
             content = resp.choices[0].message.content or "[]"
-            # Best-effort parse JSON array
             import json
+            import re
 
             keywords = []
             try:
-                parsed = json.loads(content)
+                # Remove any markdown code blocks and parse JSON
+                clean_content = re.sub(r'```(?:json)?\n?|```', '', content).strip()
+                parsed = json.loads(clean_content)
                 if isinstance(parsed, list):
                     keywords = [str(k).strip().lower() for k in parsed if str(k).strip()]
             except Exception:
-                # Fallback: split by commas/newlines
-                for part in content.replace("\n", ",").split(","):
-                    p = part.strip().strip("-•*\t ").lower()
-                    if p:
-                        keywords.append(p)
+                # Fallback: return empty list
+                keywords = []
             # Normalize: limit token length per phrase, dedupe, keep order
             seen = set()
             normalized: List[str] = []
@@ -100,7 +99,7 @@ class EmbeddingService:
             # Graceful fallback: return empty to signal caller to use full text
             return []
 
-    async def generate_keyword_embedding(self, text: str, max_keywords: int = 12) -> Tuple[List[float], List[str]]:
+    async def generate_keyword_embedding(self, text: str, max_keywords: int = 3) -> Tuple[List[float], List[str]]:
         """
         Extract keywords and embed the joined keyword string. Falls back to full text when needed.
 
