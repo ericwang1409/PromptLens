@@ -1,17 +1,24 @@
-"use client"
+"use client";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ProviderSelectorProps {
-  selectedProvider: string
-  onProviderChange: (provider: string) => void
+  selectedProvider: string;
+  onProviderChange: (provider: string) => void;
 }
 
-const providers = [
-  { id: "anthropic", name: "Anthropic Claude" },
-]
+const providers = [{ id: "anthropic", name: "Anthropic Claude" }];
 
-export function ProviderSelector({ selectedProvider, onProviderChange }: ProviderSelectorProps) {
+export function ProviderSelector({
+  selectedProvider,
+  onProviderChange,
+}: ProviderSelectorProps) {
   return (
     <Select value={selectedProvider} onValueChange={onProviderChange}>
       <SelectTrigger className="w-48 bg-card text-card-foreground">
@@ -25,5 +32,5 @@ export function ProviderSelector({ selectedProvider, onProviderChange }: Provide
         ))}
       </SelectContent>
     </Select>
-  )
+  );
 }
