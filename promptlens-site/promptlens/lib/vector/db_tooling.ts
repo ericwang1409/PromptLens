@@ -9,6 +9,7 @@ interface QueryRecord {
   prompt_embedding: number[] | null;
   response_embedding: number[] | null;
   created_at: string;
+  keywords?: string[] | string | null;
 }
 
 interface FetchParams {
@@ -48,6 +49,63 @@ class DbTooling {
     const { data, error } = await q;
     if (error) throw new Error(`fetchQueries failed: ${error.message}`);
     return (data || []) as unknown as QueryRecord[];
+  }
+
+  async aggregateKeywords(params: { since?: Date; until?: Date; limit?: number; perRecordDedup?: boolean } = {}): Promise<Array<{ keyword: string; count: number }>> {
+    // Default now counts repeats within a single record for extra context
+    const { since, until, limit = 100, perRecordDedup = false } = params;
+    let q = this.supabase
+      .from('queries')
+      .select('id, created_at, keywords')
+      .order('created_at', { ascending: true })
+      .limit(20000);
+
+    if (since) q = q.gte('created_at', since.toISOString());
+    if (until) q = q.lte('created_at', until.toISOString());
+
+    const { data, error } = await q;
+    if (error) throw new Error(`aggregateKeywords fetch failed: ${error.message}`);
+
+    const counts = new Map<string, number>();
+    const normalize = (k: string) => k.toLowerCase().trim().replace(/\s+/g, ' ');
+
+    for (const row of (data || []) as Array<Pick<QueryRecord, 'keywords'>>) {
+      let kws: string[] = [];
+      const raw = row?.keywords as unknown;
+      if (Array.isArray(raw)) {
+        kws = raw.map(v => String(v));
+      } else if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) kws = parsed.map(v => String(v));
+          else kws = raw.split(',');
+        } catch {
+          kws = raw.split(',');
+        }
+      }
+
+      if (perRecordDedup) {
+        const seen = new Set<string>();
+        for (let kw of kws) {
+          kw = normalize(kw);
+          if (!kw) continue;
+          if (seen.has(kw)) continue;
+          seen.add(kw);
+          counts.set(kw, (counts.get(kw) || 0) + 1);
+        }
+      } else {
+        for (let kw of kws) {
+          kw = normalize(kw);
+          if (!kw) continue;
+          counts.set(kw, (counts.get(kw) || 0) + 1);
+        }
+      }
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([keyword, count]) => ({ keyword, count }));
   }
 
   async ensureEmbeddings(
