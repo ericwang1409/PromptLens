@@ -1,10 +1,11 @@
 import { supabase } from './supabase'
 import type { Database } from './supabase'
-import type { ChatPrompt, ChatResponse, User, SavedVisualization } from './types'
+import type { ChatPrompt, ChatResponse, User, SavedVisualization, QueryHistory } from './types'
 
 type QueryRow = Database['public']['Tables']['queries']['Row']
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type SavedVisualizationRow = Database['public']['Tables']['saved_visualizations']['Row']
+type QueryHistoryRow = Database['public']['Tables']['query_history']['Row']
 
 // Transform database query to ChatPrompt format
 function transformQueryToPrompt(query: QueryRow): ChatPrompt {
@@ -321,6 +322,177 @@ export async function deleteVisualization(id: string, userId: string): Promise<b
     return data.success
   } catch (error) {
     console.error('Error deleting visualization:', error)
+    return false
+  }
+}
+
+// Transform database row to QueryHistory format
+function transformRowToQueryHistory(row: QueryHistoryRow): QueryHistory {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    query_text: row.query_text,
+    query_type: row.query_type,
+    chart_type: row.chart_type || undefined,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    last_used_at: row.last_used_at,
+    usage_count: row.usage_count,
+    is_favorite: row.is_favorite,
+    tags: row.tags || [],
+    metadata: row.metadata || {}
+  }
+}
+
+// Query History Functions
+export async function fetchQueryHistory(
+  userId: string,
+  limit: number = 20,
+  queryType?: string,
+  favoritesOnly: boolean = false
+): Promise<QueryHistory[]> {
+  try {
+    const params = new URLSearchParams({
+      userId,
+      limit: limit.toString()
+    })
+
+    if (queryType) {
+      params.append('queryType', queryType)
+    }
+
+    if (favoritesOnly) {
+      params.append('favoritesOnly', 'true')
+    }
+
+    const response = await fetch(`/api/query-history?${params}`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error fetching query history:', data.error)
+      return []
+    }
+
+    return (data.queries || []).map(transformRowToQueryHistory)
+  } catch (error) {
+    console.error('Error fetching query history:', error)
+    return []
+  }
+}
+
+export async function saveQueryToHistory(
+  userId: string,
+  queryText: string,
+  queryType: "natural_language" | "visualization" | "analysis" | "other" = "natural_language",
+  chartType?: "line" | "pie" | "bar" | "doughnut" | "scatter",
+  tags: string[] = [],
+  metadata: Record<string, any> = {}
+): Promise<QueryHistory | null> {
+  try {
+    const response = await fetch('/api/query-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        queryText,
+        queryType,
+        chartType,
+        tags,
+        metadata
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error saving query to history:', data.error)
+      return null
+    }
+
+    return transformRowToQueryHistory(data.query)
+  } catch (error) {
+    console.error('Error saving query to history:', error)
+    return null
+  }
+}
+
+export async function toggleQueryFavorite(
+  queryId: string,
+  userId: string,
+  isFavorite: boolean
+): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/query-history/${queryId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        isFavorite
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error toggling query favorite:', data.error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error toggling query favorite:', error)
+    return false
+  }
+}
+
+export async function deleteQueryFromHistory(
+  queryId: string,
+  userId: string
+): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/query-history/${queryId}?userId=${userId}`, {
+      method: 'DELETE'
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error deleting query from history:', data.error)
+      return false
+    }
+
+    return data.success
+  } catch (error) {
+    console.error('Error deleting query from history:', error)
+    return false
+  }
+}
+
+export async function updateQueryHistoryTags(
+  queryId: string,
+  userId: string,
+  tags: string[]
+): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/query-history/${queryId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        tags
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error('Error updating query tags:', data.error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error updating query tags:', error)
     return false
   }
 }

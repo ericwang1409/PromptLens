@@ -57,3 +57,18 @@ export interface VisualizationData {
     fill?: boolean
   }[]
 }
+
+export interface QueryHistory {
+  id: string
+  user_id: string
+  query_text: string
+  query_type: "natural_language" | "visualization" | "analysis" | "other"
+  chart_type?: "line" | "pie" | "bar" | "doughnut" | "scatter"
+  created_at: string
+  updated_at: string
+  last_used_at: string
+  usage_count: number
+  is_favorite: boolean
+  tags: string[]
+  metadata: Record<string, any>
+}

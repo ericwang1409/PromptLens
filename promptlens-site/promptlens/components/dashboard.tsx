@@ -9,7 +9,7 @@ import { ChartContainer } from "@/components/charts/chart-container";
 import { ChartPreview } from "@/components/charts/chart-preview";
 import { ViewVisualizationModal } from "@/components/view-visualization-modal";
 import { FAQModal } from "@/components/faq-modal";
-import { fetchDashboardData, fetchSavedVisualizations, deleteVisualization } from "@/lib/data-service";
+import { fetchDashboardData, fetchSavedVisualizations, deleteVisualization, fetchQueryHistory, toggleQueryFavorite, deleteQueryFromHistory } from "@/lib/data-service";
 import { useAuth } from "@/lib/auth-context";
 import {
   Plus,
@@ -32,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { ChatPrompt, ChatResponse, User, SavedVisualization } from "@/lib/types";
+import type { ChatPrompt, ChatResponse, User, SavedVisualization, QueryHistory } from "@/lib/types";
 
 export function Dashboard() {
   const { session, user } = useAuth();
@@ -63,6 +63,7 @@ export function Dashboard() {
     };
   } | null>(null);
   const [savedVisualizations, setSavedVisualizations] = useState<SavedVisualization[]>([]);
+  const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewingVisualization, setViewingVisualization] = useState<SavedVisualization | null>(null);
@@ -73,12 +74,14 @@ export function Dashboard() {
 
       setIsLoading(true);
       try {
-        const [data, visualizations] = await Promise.all([
+        const [data, visualizations, history] = await Promise.all([
           fetchDashboardData(user.id),
-          user ? fetchSavedVisualizations(user.id) : Promise.resolve([])
+          user ? fetchSavedVisualizations(user.id) : Promise.resolve([]),
+          user ? fetchQueryHistory(user.id, 10) : Promise.resolve([])
         ]);
         setDashboardData(data);
         setSavedVisualizations(visualizations);
+        setQueryHistory(history);
       } catch (error) {
         console.error("Error loading dashboard data:", error);
       } finally {
@@ -106,6 +109,43 @@ export function Dashboard() {
   const handleRegenerate = (query: string) => {
     // Navigate to visualize page with the query pre-filled
     router.push(`/visualize?query=${encodeURIComponent(query)}`);
+  };
+
+  const handleQueryClick = (query: QueryHistory) => {
+    // Navigate to visualize page with the query pre-filled
+    router.push(`/visualize?query=${encodeURIComponent(query.query_text)}`);
+  };
+
+  const handleToggleFavorite = async (queryId: string, isFavorite: boolean) => {
+    if (!user) return;
+
+    const success = await toggleQueryFavorite(queryId, user.id, !isFavorite);
+    if (success) {
+      setQueryHistory(prev =>
+        prev.map(q => q.id === queryId ? { ...q, is_favorite: !isFavorite } : q)
+      );
+    }
+  };
+
+  const handleDeleteQuery = async (queryId: string) => {
+    if (!user || !confirm('Are you sure you want to delete this query from history?')) return;
+
+    const success = await deleteQueryFromHistory(queryId, user.id);
+    if (success) {
+      setQueryHistory(prev => prev.filter(q => q.id !== queryId));
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    return date.toLocaleDateString();
   };
 
   const handleGenerateFAQ = async () => {
@@ -576,6 +616,92 @@ export function Dashboard() {
         onRegenerate={handleRegenerate}
         visualization={viewingVisualization}
       />
+
+      {/* Query History */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" />
+                Recent Query History
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your recent queries and analysis requests
+              </p>
+            </div>
+            <Button size="sm" className="gap-2" onClick={() => router.push('/visualize')}>
+              <Plus className="w-4 h-4" />
+              New Query
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {queryHistory.length > 0 ? (
+              queryHistory.map((query) => (
+                <div
+                  key={query.id}
+                  className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer group"
+                  onClick={() => handleQueryClick(query)}
+                >
+                  <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground line-clamp-2">
+                      {query.query_text}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {query.chart_type && (
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {query.chart_type}
+                        </Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {formatTimeAgo(query.last_used_at)}
+                      </span>
+                      {query.usage_count > 1 && (
+                        <span className="text-xs text-muted-foreground">
+                          ({query.usage_count} times)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(query.id, query.is_favorite);
+                      }}
+                    >
+                      <Star className={`w-4 h-4 ${query.is_favorite ? 'text-yellow-500 fill-current' : 'text-muted-foreground'}`} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteQuery(query.id);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm">No recent queries yet</p>
+                <p className="text-xs mt-1">Start asking questions to see them here</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* FAQ Modal */}
       <FAQModal

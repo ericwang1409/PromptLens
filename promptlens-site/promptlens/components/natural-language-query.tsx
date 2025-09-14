@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ChartContainer } from "@/components/charts/chart-container";
 import { SaveVisualizationModal } from "@/components/save-visualization-modal";
 import { useAuth } from "@/lib/auth-context";
-import { saveVisualization } from "@/lib/data-service";
+import { saveVisualization, saveQueryToHistory } from "@/lib/data-service";
 import {
   Send,
   Sparkles,
@@ -128,6 +128,27 @@ export function NaturalLanguageQuery() {
 
       setResult(next);
       setSegments((data as any)?.segments || null);
+
+      // Save query to history
+      if (user) {
+        try {
+          await saveQueryToHistory(
+            user.id,
+            queryText,
+            "visualization",
+            data.chartType,
+            [], // tags - could be enhanced to extract from query
+            {
+              source: "natural_language_interface",
+              chartType: data.chartType,
+              description: data.description
+            }
+          );
+        } catch (error) {
+          console.error("Failed to save query to history:", error);
+          // Don't show error to user, just log it
+        }
+      }
     } catch (e: any) {
       setResult({
         query: queryText,
@@ -136,6 +157,26 @@ export function NaturalLanguageQuery() {
         data: { labels: [], datasets: [] },
         insights: [],
       });
+
+      // Save failed query to history as well
+      if (user) {
+        try {
+          await saveQueryToHistory(
+            user.id,
+            queryText,
+            "visualization",
+            "line", // default chart type for failed queries
+            [], // tags
+            {
+              source: "natural_language_interface",
+              status: "failed",
+              error: e?.message || "Unknown error"
+            }
+          );
+        } catch (error) {
+          console.error("Failed to save failed query to history:", error);
+        }
+      }
     } finally {
       setIsLoading(false);
     }
