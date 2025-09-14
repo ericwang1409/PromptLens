@@ -53,13 +53,20 @@ function transformProfileToUser(profile: ProfileRow): User {
   }
 }
 
-export async function fetchQueries(limit: number = 100): Promise<QueryRow[]> {
+export async function fetchQueries(limit: number = 100, userId?: string): Promise<QueryRow[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('queries')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit)
+
+    // Filter by user_id if provided
+    if (userId) {
+      query = query.eq('user_id', userId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Error fetching queries:', error)
@@ -73,13 +80,20 @@ export async function fetchQueries(limit: number = 100): Promise<QueryRow[]> {
   }
 }
 
-export async function fetchProfiles(limit: number = 100): Promise<ProfileRow[]> {
+export async function fetchProfiles(limit: number = 100, userId?: string): Promise<ProfileRow[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit)
+
+    // Filter by user_id if provided - only return current user's profile
+    if (userId) {
+      query = query.eq('id', userId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Error fetching profiles:', error)
@@ -93,12 +107,12 @@ export async function fetchProfiles(limit: number = 100): Promise<ProfileRow[]> 
   }
 }
 
-export async function fetchDashboardData() {
+export async function fetchDashboardData(userId?: string) {
   try {
     // Fetch queries and profiles in parallel
     const [queries, profiles] = await Promise.all([
-      fetchQueries(1000),
-      fetchProfiles(1000)
+      fetchQueries(1000, userId),
+      fetchProfiles(1000, userId)
     ])
 
     // Transform data to match expected formats

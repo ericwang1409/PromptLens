@@ -1,4 +1,5 @@
 import { Agent } from '../../../lib/vector/agent';
+import { createClient } from '@supabase/supabase-js';
 
 type ChartType = 'line' | 'bar' | 'pie';
 
@@ -12,6 +13,34 @@ export async function POST(req: Request) {
     const body = await req.json();
     const query: string = body?.query || '';
 
+    // Get auth token from headers
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Authorization required' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Create Supabase client to verify auth
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
+
+    // Extract token from Bearer token
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify the token and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid authentication' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const agent = new Agent({
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
@@ -19,7 +48,7 @@ export async function POST(req: Request) {
       defaultThreshold: 0.1,
     });
 
-    const result = await agent.run(query, { limit: 2000 });
+    const result = await agent.run(query, { limit: 2000, userId: user.id });
     const chartType = result.graphType as ChartType;
     const data = mapAgentToChartData(chartType, result.data as any);
 
