@@ -9,7 +9,6 @@ import {
   Search,
   BarChart3,
   MessageSquare,
-  Users,
   Settings,
   Plus,
   Bookmark,
@@ -30,7 +29,6 @@ export function Sidebar() {
       href: "/visualize",
     },
     { id: "saved", label: "Dashboard", icon: Bookmark, href: "/saved" },
-    { id: "users", label: "Users", icon: Users, href: "/users" },
   ];
 
   const handleSettingsClick = () => {
@@ -49,7 +47,9 @@ export function Sidebar() {
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <BarChart3 className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-sidebar-foreground">Prompt Lens</span>
+          <span className="font-semibold text-sidebar-foreground">
+            Prompt Lens
+          </span>
         </div>
 
         <div className="relative">
