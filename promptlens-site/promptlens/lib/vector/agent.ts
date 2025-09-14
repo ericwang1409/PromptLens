@@ -230,6 +230,7 @@ class Agent {
       'You refine search categories from candidate keywords (with frequencies).',
       originalPrompt ? `Original prompt: ${originalPrompt}` : 'Original prompt: (none)',
       originalKeywords.length ? `Original query categories/topics: ${originalKeywords.join(', ')}` : 'Original query categories/topics: (none)',
+      'If the admin query has not requested any categories/topics, return an empty keywords list.',
       'If the original query categories/topics are empty, based on the admin query, create a set of categories/topics, minimizing the number of categories chosen, that cover what the user has requested to be visualized and populate the keywords list with the categories/topics.',
       'If you deem that the original query categories/topics cover the range of keywords, return the original query categories/topics.',
       `Otherwise, choose a set of categories/topics related to the original query categories/topics, minimizing the number of categories/topics chosen, based on the original prompt, original query categories/topics, and candidate keywords.`,
