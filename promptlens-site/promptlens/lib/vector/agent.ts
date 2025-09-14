@@ -28,6 +28,7 @@ interface AgentResult {
     totalCandidates: number;
     matchedCount: number;
   };
+  segments?: any;
 }
 
 class Agent {
@@ -129,6 +130,40 @@ class Agent {
     // 4) Aggregate per graph type from final matches
     const result = this.generateGraphDataFromMatches(graphType, finalMatchedMap, records, candidates, usedField);
 
+    // 4b) Build segment -> recordId mappings for UI drill-down (no extra agent work later)
+    const segments: any = {};
+    if (graphType === 'pie') {
+      const map: Record<string, string[]> = {};
+      for (const [term, idxs] of Object.entries(finalMatchedMap)) {
+        map[term] = idxs.map(idx => records[candidates[idx].i].id);
+      }
+      segments.pie = map;
+    } else if (graphType === 'line') {
+      const lineMap: Record<string, Record<string, string[]>> = {};
+      for (const [term, idxs] of Object.entries(finalMatchedMap)) {
+        for (const idx of idxs) {
+          const rec = records[candidates[idx].i];
+          const day = (rec.created_at || '').slice(0, 10);
+          if (!lineMap[day]) lineMap[day] = {};
+          if (!lineMap[day][term]) lineMap[day][term] = [];
+          lineMap[day][term].push(rec.id);
+        }
+      }
+      segments.line = lineMap;
+    } else if (graphType === 'bar') {
+      const barMap: Record<string, Record<string, string[]>> = {};
+      for (const [term, idxs] of Object.entries(finalMatchedMap)) {
+        for (const idx of idxs) {
+          const rec = records[candidates[idx].i];
+          const user = rec.user_id || 'unknown';
+          if (!barMap[user]) barMap[user] = {};
+          if (!barMap[user][term]) barMap[user][term] = [];
+          barMap[user][term].push(rec.id);
+        }
+      }
+      segments.bar = barMap;
+    }
+
     return {
       graphType,
       data: result,
@@ -139,6 +174,7 @@ class Agent {
         totalCandidates: candidateEmbeddings.length,
         matchedCount: finalMatchedIndices.length,
       },
+      segments,
     };
   }
 
@@ -203,6 +239,8 @@ class Agent {
       candidates.join(', ')
     ].join('\n');
 
+    console.log("candidates", candidates)
+
     try {
       const completion = await this.llm.invoke([{ role: 'user', content: prompt }] as any);
       const parsed = await parser.parse((completion?.content as string) || '');
@@ -227,13 +265,13 @@ class Agent {
     );
 
     const prompt = [
-      'You are a planner that creates a hierarchical keyword graph for semantic search.',
+      'You are a planner that creates a categories/topics list for semantic search.',
       'You are able to choose between pie and line graphs as graphType.',
       'If you are working with any time series data, you should choose line as graphType.',
       'Otherwise, you should choose pie as graphType.',
       'You are also able to choose between prompt and response as usedField.',
       'Check if the user has requested any categories/topics in the query.',
-      'If the user has requested categories, choose a set of categories/topics, minimizing the number of categories chosen, that the user has requested to be visualized and populate the keywords list with the categories. If a number of categories is mentioned, choose that many categories.',
+      'If the user has requested categories, choose a set of categories/topics, minimizing the number of categories chosen, that the user has requested to be visualized and populate the keywords list with the categories/topics. If a number of categories/topics is mentioned, choose that many categories.',
       'If the user has not requested any categories/topics (e.g. "visualize all of the data" or "show me daily prompt volume"), return an empty keywords list.',
       'You should not include the words prompt, prompts, response or responses in the graph.',
       `Admin query: "${query}"`,
@@ -256,7 +294,6 @@ class Agent {
   ): Record<string, number[]> {
     const results: Record<string, number[]> = {};
     const terms = Array.from(termToEmbedding.keys());
-    console.log("terms", terms)
     if (terms.length === 0) {
       // No query terms: include all candidates under a single bucket
       results["all"] = candidateEmbeddings.map((_, idx) => idx);
@@ -270,6 +307,87 @@ class Agent {
     return results;
   }
 
+  async details(
+    adminQuery: string,
+    options: { limit?: number; since?: Date; until?: Date; userId?: string },
+    segment: { type: 'pie'; label: string } | { type: 'line'; timestamp: string; label?: string } | { type: 'bar'; group: string; label: string }
+  ): Promise<Array<{ id: string; user_id: string; created_at: string; prompt: string | null; response: string | null }>> {
+    const { graphType, usedField, keywords } = await this.decidePlan(adminQuery);
+
+    const records = await this.db.fetchQueries({
+      limit: options?.limit ?? 1000,
+      since: options?.since,
+      until: options?.until,
+      fields: usedField,
+      userId: options?.userId,
+    });
+
+    await this.db.ensureEmbeddings(records, this.embedder, usedField);
+
+    const keyTerms = keywords.length ? keywords : [];
+    const termToEmbedding = new Map<string, number[]>();
+    if (keyTerms.length > 0) {
+      const keywordEmbeddings = await this.embedder.generateBatchEmbeddings(keyTerms);
+      keyTerms.forEach((t, i) => termToEmbedding.set(t, keywordEmbeddings[i]));
+    }
+
+    function toNumArray(v: unknown): number[] {
+      if (Array.isArray(v)) return v as number[];
+      if (typeof v === 'string' && v.startsWith('[')) return JSON.parse(v);
+      return [];
+    }
+
+    const candidates = records.map((r, i) => {
+      const raw = usedField === 'prompt' ? r.prompt_embedding : r.response_embedding;
+      return { i, e: toNumArray(raw) };
+    });
+    const candidateEmbeddings: number[][] = candidates.map(c => c.e);
+
+    // First pass
+    const matchedMapFirst = this.search(termToEmbedding, candidateEmbeddings);
+    const matchedIndicesFirst = Array.from(new Set(Object.values(matchedMapFirst).flat()));
+    const matchedRecordsFirst: QueryRecord[] = matchedIndicesFirst.map((idx) => records[candidates[idx].i]);
+
+    // Refine
+    const refinedKeywords = await this.refineKeywordsFromRecords(matchedRecordsFirst, usedField, 5, keywords, adminQuery);
+    let finalMatchedMap: Record<string, number[]> = matchedMapFirst;
+    let finalMatchedIndices: number[] = matchedIndicesFirst;
+    if (refinedKeywords.length > 0 && matchedIndicesFirst.length > 0) {
+      const refinedEmbeddings = await this.embedder.generateBatchEmbeddings(refinedKeywords);
+      const refinedTermToEmbedding = new Map<string, number[]>();
+      refinedKeywords.forEach((t, i) => refinedTermToEmbedding.set(t, refinedEmbeddings[i]));
+      const subsetEmbeddings = matchedIndicesFirst.map(idx => candidateEmbeddings[idx]);
+      const matchedMapSecondRel = this.search(refinedTermToEmbedding, subsetEmbeddings);
+      const mapped: Record<string, number[]> = {};
+      for (const [term, relIdxs] of Object.entries(matchedMapSecondRel)) {
+        mapped[term] = relIdxs.map(rel => matchedIndicesFirst[rel]);
+      }
+      finalMatchedMap = mapped;
+      finalMatchedIndices = Array.from(new Set(Object.values(mapped).flat()));
+    }
+
+    // Filter by segment
+    let indices: number[] = [];
+    if (segment.type === 'pie') {
+      indices = finalMatchedMap[segment.label] || [];
+    } else if (segment.type === 'line') {
+      const day = segment.timestamp.slice(0, 10);
+      const pool = segment.label ? (finalMatchedMap[segment.label] || []) : finalMatchedIndices;
+      indices = pool.filter(idx => (records[candidates[idx].i].created_at || '').slice(0, 10) === day);
+    } else if (segment.type === 'bar') {
+      const pool = finalMatchedMap[segment.label] || [];
+      indices = pool.filter(idx => (records[candidates[idx].i].user_id || 'unknown') === segment.group);
+    }
+
+    const items = indices.map(idx => records[candidates[idx].i]).map(r => ({
+      id: r.id,
+      user_id: r.user_id,
+      created_at: r.created_at,
+      prompt: r.prompt,
+      response: r.response,
+    }));
+    return items;
+  }
   private generateGraphDataFromMatches(
     graphType: GraphType,
     matchedMap: Record<string, number[]>,
