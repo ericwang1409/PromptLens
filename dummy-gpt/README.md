@@ -19,15 +19,22 @@ A clean and minimalistic chatbot interface built with Next.js, React, and Tailwi
    # Anthropic API Configuration
    ANTHROPIC_API_KEY=your_anthropic_api_key_here
    
+   # PromptLens API Configuration
+   PROMPTLENS_API_KEY=your_promptlens_api_key_here
+   
    # FastAPI Backend Configuration (optional)
    FASTAPI_BASE_URL=https://prompt-lens-c4218b9ba45e.herokuapp.com
    ```
 
-2. **Get your Anthropic API key**:
-   - Go to [console.anthropic.com](https://console.anthropic.com/)
-   - Sign up or log in
-   - Create a new API key
-   - Copy the key and paste it in your `.env.local` file
+2. **Get your API keys**:
+   - **Anthropic API key**: Go to [console.anthropic.com](https://console.anthropic.com/)
+     - Sign up or log in
+     - Create a new API key
+     - Copy the key and paste it as `ANTHROPIC_API_KEY` in your `.env.local` file
+   
+   - **PromptLens API key**: Get this from your PromptLens account
+     - This is used to authenticate with your FastAPI backend
+     - Copy the key and paste it as `PROMPTLENS_API_KEY` in your `.env.local` file
 
 3. **Install dependencies**:
    ```bash

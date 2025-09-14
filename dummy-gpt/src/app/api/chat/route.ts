@@ -4,6 +4,7 @@ import { ChatRequest, ChatResponse } from '@/types/chat';
 // Configuration for your FastAPI backend
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || "https://prompt-lens-c4218b9ba45e.herokuapp.com";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const PROMPTLENS_API_KEY = process.env.PROMPTLENS_API_KEY;
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,14 +31,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!PROMPTLENS_API_KEY) {
+      console.log('❌ PromptLens API key not configured');
+      return NextResponse.json(
+        { error: 'PromptLens API key not configured. Please set PROMPTLENS_API_KEY environment variable.' },
+        { status: 500 }
+      );
+    }
+
     console.log('🌐 Making request to FastAPI backend...');
     console.log('🔗 URL:', `${FASTAPI_BASE_URL}/api/generate`);
+    console.log('🔑 Using PromptLens API key for authentication');
 
     // Call your FastAPI backend
     const fastApiResponse = await fetch(`${FASTAPI_BASE_URL}/api/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PROMPTLENS_API_KEY}`,
       },
       body: JSON.stringify({
         prompt: message,
