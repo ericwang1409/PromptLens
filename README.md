@@ -4,6 +4,9 @@
 
 **PromptLens** is a comprehensive AI-powered analytics and chat platform that helps organizations understand, analyze, and optimize their AI interactions. It's essentially a "business intelligence tool for AI conversations" that provides deep insights into how people interact with AI systems.
 
+<img width="1434" height="702" alt="Screenshot 2025-09-14 at 11 04 56 AM" src="https://github.com/user-attachments/assets/d8155998-c55b-419f-9462-2afbd30ccf11" />
+
+
 ## **Core Functionality**
 
 ### 🧠 **1. AI Chat Analytics**
