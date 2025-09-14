@@ -39,12 +39,12 @@ export interface SavedVisualization {
   name: string
   description: string
   query: string
-  chart_type: "line" | "bar" | "pie" | "scatter" | "heatmap" | "timeline"
+  chart_type: "line" | "pie"
+  chart_data: any
   config: Record<string, any>
   created_by: string
   created_at: string
   updated_at: string
-  is_public: boolean
 }
 
 export interface VisualizationData {
@@ -56,4 +56,19 @@ export interface VisualizationData {
     borderColor?: string
     fill?: boolean
   }[]
+}
+
+export interface QueryHistory {
+  id: string
+  user_id: string
+  query_text: string
+  query_type: "natural_language" | "visualization" | "analysis" | "other"
+  chart_type?: "line" | "pie" | "bar" | "doughnut" | "scatter"
+  created_at: string
+  updated_at: string
+  last_used_at: string
+  usage_count: number
+  is_favorite: boolean
+  tags: string[]
+  metadata: Record<string, any>
 }

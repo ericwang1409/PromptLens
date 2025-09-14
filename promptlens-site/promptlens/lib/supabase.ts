@@ -108,6 +108,88 @@ export type Database = {
           rating?: number
         }
       }
+      saved_visualizations: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          description?: string
+          query: string
+          chart_type: "line" | "pie"
+          chart_data: any
+          config: any
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          description?: string
+          query: string
+          chart_type: "line" | "pie"
+          chart_data: any
+          config?: any
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          description?: string
+          query?: string
+          chart_type?: "line" | "pie"
+          chart_data?: any
+          config?: any
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      query_history: {
+        Row: {
+          id: string
+          user_id: string
+          query_text: string
+          query_type: "natural_language" | "visualization" | "analysis" | "other"
+          chart_type?: "line" | "pie" | "bar" | "doughnut" | "scatter"
+          created_at: string
+          updated_at: string
+          last_used_at: string
+          usage_count: number
+          is_favorite: boolean
+          tags: string[]
+          metadata: any
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          query_text: string
+          query_type?: "natural_language" | "visualization" | "analysis" | "other"
+          chart_type?: "line" | "pie" | "bar" | "doughnut" | "scatter"
+          created_at?: string
+          updated_at?: string
+          last_used_at?: string
+          usage_count?: number
+          is_favorite?: boolean
+          tags?: string[]
+          metadata?: any
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          query_text?: string
+          query_type?: "natural_language" | "visualization" | "analysis" | "other"
+          chart_type?: "line" | "pie" | "bar" | "doughnut" | "scatter"
+          created_at?: string
+          updated_at?: string
+          last_used_at?: string
+          usage_count?: number
+          is_favorite?: boolean
+          tags?: string[]
+          metadata?: any
+        }
+      }
     }
   }
 }

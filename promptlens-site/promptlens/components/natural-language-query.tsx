@@ -2,13 +2,16 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ChartContainer } from "@/components/charts/chart-container";
+import { SaveVisualizationModal } from "@/components/save-visualization-modal";
 import { useAuth } from "@/lib/auth-context";
+import { saveVisualization, saveQueryToHistory } from "@/lib/data-service";
 import {
   Send,
   Sparkles,
@@ -34,13 +37,31 @@ interface QueryResult {
 }
 
 export function NaturalLanguageQuery() {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [segments, setSegments] = useState<any>(null);
   const [details, setDetails] = useState<Array<{ id: string; user_id: string; created_at: string; prompt: string | null; response: string | null }>>([]);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
+  // Handle pre-filled query from URL parameters (for regenerate functionality)
+  useEffect(() => {
+    const urlQuery = searchParams.get('query');
+    if (urlQuery) {
+      setQuery(urlQuery);
+    }
+  }, [searchParams]);
+
+  // Auto-submit when query is set from URL
+  useEffect(() => {
+    const urlQuery = searchParams.get('query');
+    if (urlQuery && query === urlQuery && !isLoading && !result) {
+      handleSubmit(urlQuery);
+    }
+  }, [query, searchParams, isLoading, result]);
 
   const suggestions: QuerySuggestion[] = [
     {
@@ -107,6 +128,27 @@ export function NaturalLanguageQuery() {
 
       setResult(next);
       setSegments((data as any)?.segments || null);
+
+      // Save query to history
+      if (user) {
+        try {
+          await saveQueryToHistory(
+            user.id,
+            queryText,
+            "visualization",
+            data.chartType,
+            [], // tags - could be enhanced to extract from query
+            {
+              source: "natural_language_interface",
+              chartType: data.chartType,
+              description: data.description
+            }
+          );
+        } catch (error) {
+          console.error("Failed to save query to history:", error);
+          // Don't show error to user, just log it
+        }
+      }
     } catch (e: any) {
       setResult({
         query: queryText,
@@ -115,6 +157,26 @@ export function NaturalLanguageQuery() {
         data: { labels: [], datasets: [] },
         insights: [],
       });
+
+      // Save failed query to history as well
+      if (user) {
+        try {
+          await saveQueryToHistory(
+            user.id,
+            queryText,
+            "visualization",
+            "line", // default chart type for failed queries
+            [], // tags
+            {
+              source: "natural_language_interface",
+              status: "failed",
+              error: e?.message || "Unknown error"
+            }
+          );
+        } catch (error) {
+          console.error("Failed to save failed query to history:", error);
+        }
+      }
     } finally {
       setIsLoading(false);
     }
@@ -122,6 +184,28 @@ export function NaturalLanguageQuery() {
 
   const handleSuggestionClick = (suggestion: QuerySuggestion) => {
     handleSubmit(suggestion.text);
+  };
+
+  const handleSaveVisualization = async (saveData: {
+    name: string;
+    description: string;
+  }) => {
+    if (!user || !result) return;
+
+    const saved = await saveVisualization(
+      user.id,
+      saveData.name,
+      result.query,
+      result.chartType,
+      result.data,
+      saveData.description,
+      {}
+    );
+
+    if (saved) {
+      // Could add a toast notification here
+      console.log('Visualization saved successfully');
+    }
   };
 
   return (
@@ -314,7 +398,12 @@ export function NaturalLanguageQuery() {
 
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSaveModal(true)}
+              disabled={!user}
+            >
               Save Visualization
             </Button>
             <Button variant="outline" size="sm">
@@ -325,6 +414,17 @@ export function NaturalLanguageQuery() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Save Visualization Modal */}
+      {result && (
+        <SaveVisualizationModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          onSave={handleSaveVisualization}
+          query={result.query}
+          chartType={result.chartType}
+        />
       )}
     </div>
   );

@@ -1,10 +1,13 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
+import { fetchQueryHistory } from "@/lib/data-service";
+import type { QueryHistory } from "@/lib/types";
 import {
   Search,
   BarChart3,
@@ -13,12 +16,17 @@ import {
   Plus,
   Bookmark,
   LogIn,
+  Clock,
+  Star,
+  Trash2,
 } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([]);
+  const [showFavorites, setShowFavorites] = useState(false);
 
   const navigationItems = [
     { id: "browse", label: "Browse Data", icon: MessageSquare, href: "/" },
@@ -31,12 +39,48 @@ export function Sidebar() {
     { id: "saved", label: "Dashboard", icon: Bookmark, href: "/saved" },
   ];
 
+  // Load query history when user changes
+  useEffect(() => {
+    async function loadQueryHistory() {
+      if (!user) {
+        setQueryHistory([]);
+        return;
+      }
+
+      try {
+        const history = await fetchQueryHistory(user.id, 10, undefined, showFavorites);
+        setQueryHistory(history);
+      } catch (error) {
+        console.error('Error loading query history:', error);
+      }
+    }
+
+    loadQueryHistory();
+  }, [user, showFavorites]);
+
   const handleSettingsClick = () => {
     if (user) {
       router.push("/settings");
     } else {
       router.push("/login");
     }
+  };
+
+  const handleQueryClick = (query: QueryHistory) => {
+    // Navigate to visualize page with the query pre-filled
+    router.push(`/visualize?query=${encodeURIComponent(query.query_text)}`);
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -84,35 +128,70 @@ export function Sidebar() {
         <div className="mt-8">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-sidebar-foreground">
-              Recent Queries
+              {showFavorites ? 'Favorite Queries' : 'Recent Queries'}
             </h3>
-            <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-              <Plus className="w-3 h-3" />
-            </Button>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={() => setShowFavorites(!showFavorites)}
+                title={showFavorites ? 'Show all queries' : 'Show favorites only'}
+              >
+                <Star className={`w-3 h-3 ${showFavorites ? 'text-yellow-500 fill-current' : 'text-muted-foreground'}`} />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Add new query">
+                <Plus className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <div className="p-2 rounded-md bg-sidebar-accent/50 cursor-pointer hover:bg-sidebar-accent">
-              <p className="text-xs text-sidebar-foreground line-clamp-2">
-                Show daily prompt volume trends
-              </p>
-              <div className="flex gap-1 mt-1">
-                <Badge variant="secondary" className="text-xs">
-                  line chart
-                </Badge>
+            {queryHistory.length > 0 ? (
+              queryHistory.map((query) => (
+                <div
+                  key={query.id}
+                  className="p-2 rounded-md bg-sidebar-accent/50 cursor-pointer hover:bg-sidebar-accent group"
+                  onClick={() => handleQueryClick(query)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-sidebar-foreground line-clamp-2">
+                        {query.query_text}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        {query.chart_type && (
+                          <Badge variant="secondary" className="text-xs">
+                            {query.chart_type}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatTimeAgo(query.last_used_at)}
+                        </span>
+                        {query.usage_count > 1 && (
+                          <span className="text-xs text-muted-foreground">
+                            ({query.usage_count}x)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {query.is_favorite && (
+                      <Star className="w-3 h-3 text-yellow-500 fill-current flex-shrink-0" />
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-xs text-muted-foreground">
+                  {showFavorites ? 'No favorite queries yet' : 'No recent queries'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Start asking questions to see them here
+                </p>
               </div>
-            </div>
-
-            <div className="p-2 rounded-md bg-sidebar-accent/50 cursor-pointer hover:bg-sidebar-accent">
-              <p className="text-xs text-sidebar-foreground line-clamp-2">
-                Compare user engagement by department
-              </p>
-              <div className="flex gap-1 mt-1">
-                <Badge variant="secondary" className="text-xs">
-                  bar chart
-                </Badge>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </nav>
