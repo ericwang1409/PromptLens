@@ -120,16 +120,16 @@ export function ChatInterface({ provider }: ChatInterfaceProps) {
           <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
             <Card
               className={`max-w-[80%] p-4 ${
-                message.role === "user" ? "bg-secondary text-secondary-foreground" : "bg-card text-card-foreground"
+                message.role === "user" ? "bg-white text-secondary-foreground" : "bg-card text-card-foreground"
               }`}
             >
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
-                  {message.role === "user" ? <User className="w-5 h-5 mt-0.5" /> : <Bot className="w-5 h-5 mt-0.5" />}
+                  {message.role === "user" ? <User className="w-5 h-5 mt-0.5 text-black" /> : <Bot className="w-5 h-5 mt-0.5 text-black" />}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm leading-relaxed">{message.content}</p>
-                  <p className="text-xs text-muted-foreground mt-2">{message.timestamp.toLocaleTimeString()}</p>
+                  <p className="text-sm text-black leading-relaxed">{message.content}</p>
+                  <p className="text-xs text-black text-muted-foreground mt-2">{message.timestamp.toLocaleTimeString()}</p>
                 </div>
               </div>
             </Card>
@@ -173,7 +173,7 @@ export function ChatInterface({ provider }: ChatInterfaceProps) {
           <Button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="bg-secondary hover:bg-secondary/90 text-secondary-foreground"
+            className="bg-gray-500 hover:bg-gray-800/90 text-secondary-foreground"
           >
             <Send className="w-4 h-4" />
           </Button>
