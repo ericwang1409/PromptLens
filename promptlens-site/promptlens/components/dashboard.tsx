@@ -1,104 +1,164 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { ChartContainer } from "@/components/charts/chart-container"
-import { ChartPreview } from "@/components/charts/chart-preview"
-import { ViewVisualizationModal } from "@/components/view-visualization-modal"
-import { fetchDashboardData, fetchSavedVisualizations, deleteVisualization } from "@/lib/data-service"
-import { useAuth } from "@/lib/auth-context"
-import { Plus, TrendingUp, Users, MessageSquare, Clock, Star, BarChart3, Eye, Edit, Trash2 } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { ChatPrompt, ChatResponse, User, SavedVisualization } from "@/lib/types"
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { ChartContainer } from "@/components/charts/chart-container";
+import { ChartPreview } from "@/components/charts/chart-preview";
+import { ViewVisualizationModal } from "@/components/view-visualization-modal";
+import { FAQModal } from "@/components/faq-modal";
+import { fetchDashboardData, fetchSavedVisualizations, deleteVisualization } from "@/lib/data-service";
+import { useAuth } from "@/lib/auth-context";
+import {
+  Plus,
+  TrendingUp,
+  Users,
+  MessageSquare,
+  Clock,
+  Star,
+  BarChart3,
+  Eye,
+  Edit,
+  Trash2,
+  HelpCircle,
+  Sparkles,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { ChatPrompt, ChatResponse, User, SavedVisualization } from "@/lib/types";
 
 export function Dashboard() {
-  const { user } = useAuth()
-  const router = useRouter()
+  const { session, user } = useAuth();
+  const router = useRouter();
+  const [selectedVisualization, setSelectedVisualization] = useState<
+    string | null
+  >(null);
+  const [faqModalOpen, setFaqModalOpen] = useState(false);
+  const [faqContent, setFaqContent] = useState("");
+  const [faqStats, setFaqStats] = useState<any>(null);
+  const [generatingFaq, setGeneratingFaq] = useState(false);
   const [dashboardData, setDashboardData] = useState<{
-    prompts: ChatPrompt[]
-    responses: ChatResponse[]
-    users: User[]
+    prompts: ChatPrompt[];
+    responses: ChatResponse[];
+    users: User[];
     metrics: {
-      totalPrompts: number
-      totalUsers: number
-      avgRating: number
-      avgResponseTime: number
-      totalTokens: number
-      cacheHitRate: number
-      totalCachedQueries: number
-    }
+      totalPrompts: number;
+      totalUsers: number;
+      avgRating: number;
+      avgResponseTime: number;
+      totalTokens: number;
+      cacheHitRate: number;
+      totalCachedQueries: number;
+    };
     chartData: {
-      dailyVolume: number[]
-      dayNames: string[]
-    }
-  } | null>(null)
-  const [savedVisualizations, setSavedVisualizations] = useState<SavedVisualization[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [viewModalOpen, setViewModalOpen] = useState(false)
-  const [viewingVisualization, setViewingVisualization] = useState<SavedVisualization | null>(null)
+      dailyVolume: number[];
+      dayNames: string[];
+    };
+  } | null>(null);
+  const [savedVisualizations, setSavedVisualizations] = useState<SavedVisualization[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [viewingVisualization, setViewingVisualization] = useState<SavedVisualization | null>(null);
 
   useEffect(() => {
     async function loadData() {
-      setIsLoading(true)
+      if (!user) return; // Don't load data if user is not authenticated
+
+      setIsLoading(true);
       try {
         const [data, visualizations] = await Promise.all([
-          fetchDashboardData(),
+          fetchDashboardData(user.id),
           user ? fetchSavedVisualizations(user.id) : Promise.resolve([])
-        ])
-        setDashboardData(data)
-        setSavedVisualizations(visualizations)
+        ]);
+        setDashboardData(data);
+        setSavedVisualizations(visualizations);
       } catch (error) {
-        console.error('Error loading dashboard data:', error)
+        console.error("Error loading dashboard data:", error);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     }
 
-    loadData()
-  }, [user])
+    loadData();
+  }, [user]);
 
   const handleDeleteVisualization = async (vizId: string) => {
-    if (!user || !confirm('Are you sure you want to delete this visualization?')) return
+    if (!user || !confirm('Are you sure you want to delete this visualization?')) return;
 
-    const success = await deleteVisualization(vizId, user.id)
+    const success = await deleteVisualization(vizId, user.id);
     if (success) {
-      setSavedVisualizations(prev => prev.filter(viz => viz.id !== vizId))
+      setSavedVisualizations(prev => prev.filter(viz => viz.id !== vizId));
     }
-  }
+  };
 
   const handleViewVisualization = (viz: SavedVisualization) => {
-    setViewingVisualization(viz)
-    setViewModalOpen(true)
-  }
+    setViewingVisualization(viz);
+    setViewModalOpen(true);
+  };
 
   const handleRegenerate = (query: string) => {
     // Navigate to visualize page with the query pre-filled
-    router.push(`/visualize?query=${encodeURIComponent(query)}`)
-  }
+    router.push(`/visualize?query=${encodeURIComponent(query)}`);
+  };
+
+  const handleGenerateFAQ = async () => {
+    if (!session?.access_token) {
+      alert("Please log in to generate FAQ");
+      return;
+    }
+
+    setGeneratingFaq(true);
+    try {
+      const response = await fetch("/api/generate-faq", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate FAQ");
+      }
+
+      setFaqContent(data.faq);
+      setFaqStats(data.stats);
+      setFaqModalOpen(true);
+    } catch (error: any) {
+      console.error("Error generating FAQ:", error);
+      alert(error.message || "Failed to generate FAQ");
+    } finally {
+      setGeneratingFaq(false);
+    }
+  };
 
   // Use real data if available, otherwise show loading state
-  const totalPrompts = dashboardData?.metrics.totalPrompts || 0
-  const totalUsers = dashboardData?.metrics.totalUsers || 0
-  const avgRating = dashboardData?.metrics.avgRating || 0
-  const avgResponseTime = dashboardData?.metrics.avgResponseTime || 0
+  const totalPrompts = dashboardData?.metrics.totalPrompts || 0;
+  const totalUsers = dashboardData?.metrics.totalUsers || 0;
+  const avgRating = dashboardData?.metrics.avgRating || 0;
+  const avgResponseTime = dashboardData?.metrics.avgResponseTime || 0;
 
   // Use real cache hit data from the data service
-  const cacheHitRate = dashboardData?.metrics.cacheHitRate || 0
-  const cacheMissRate = 100 - cacheHitRate
-  const totalCachedQueries = dashboardData?.metrics.totalCachedQueries || 0
+  const cacheHitRate = dashboardData?.metrics.cacheHitRate || 0;
+  const cacheMissRate = 100 - cacheHitRate;
+  const totalCachedQueries = dashboardData?.metrics.totalCachedQueries || 0;
 
   // Calculate ratings distribution from real data
-  const ratingsDistribution = [0, 0, 0, 0, 0] // [1-star, 2-star, 3-star, 4-star, 5-star]
-  dashboardData?.prompts.forEach(prompt => {
-    const rating = prompt.metadata.satisfaction_rating
+  const ratingsDistribution = [0, 0, 0, 0, 0]; // [1-star, 2-star, 3-star, 4-star, 5-star]
+  dashboardData?.prompts.forEach((prompt) => {
+    const rating = prompt.metadata.satisfaction_rating;
     if (rating && rating >= 1 && rating <= 5) {
-      ratingsDistribution[rating - 1]++
+      ratingsDistribution[rating - 1]++;
     }
-  })
+  });
 
   // Chart data using real data
   const dashboardCharts = [
@@ -108,7 +168,15 @@ export function Dashboard() {
       description: "Prompt submissions over the last 7 days",
       chartType: "line" as const,
       data: {
-        labels: dashboardData?.chartData.dayNames || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        labels: dashboardData?.chartData.dayNames || [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun",
+        ],
         datasets: [
           {
             label: "Prompts",
@@ -123,7 +191,9 @@ export function Dashboard() {
     {
       id: "cache-hit-rate",
       title: "Cache Hit Percentage",
-      description: `${cacheHitRate.toFixed(1)}% cache hit rate from ${totalPrompts} queries`,
+      description: `${cacheHitRate.toFixed(
+        1
+      )}% cache hit rate from ${totalPrompts} queries`,
       chartType: "pie" as const,
       data: {
         labels: ["Cache Hits", "Cache Misses"],
@@ -133,7 +203,7 @@ export function Dashboard() {
             data: [cacheHitRate, cacheMissRate],
             backgroundColor: [
               "oklch(0.65 0.15 120)", // Green for hits
-              "oklch(0.65 0.15 0)",   // Red for misses
+              "oklch(0.65 0.15 0)", // Red for misses
             ],
           },
         ],
@@ -151,9 +221,9 @@ export function Dashboard() {
             label: "Number of Ratings",
             data: ratingsDistribution,
             backgroundColor: [
-              "oklch(0.65 0.15 0)",   // Red for 1 star
-              "oklch(0.65 0.15 30)",  // Orange for 2 stars
-              "oklch(0.65 0.15 60)",  // Yellow for 3 stars
+              "oklch(0.65 0.15 0)", // Red for 1 star
+              "oklch(0.65 0.15 30)", // Orange for 2 stars
+              "oklch(0.65 0.15 60)", // Yellow for 3 stars
               "oklch(0.65 0.15 120)", // Light green for 4 stars
               "oklch(0.65 0.15 140)", // Green for 5 stars
             ],
@@ -161,14 +231,17 @@ export function Dashboard() {
         ],
       },
     },
-  ]
+  ];
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="bg-gradient-to-br from-muted/5 to-muted/10">
+            <Card
+              key={i}
+              className="bg-gradient-to-br from-muted/5 to-muted/10"
+            >
               <CardContent className="p-4">
                 <div className="animate-pulse">
                   <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
@@ -183,7 +256,7 @@ export function Dashboard() {
           <p className="text-muted-foreground">Loading dashboard data...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -194,9 +267,15 @@ export function Dashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Conversations</p>
-                <p className="text-2xl font-bold text-foreground">{totalPrompts}</p>
-                <p className="text-xs text-muted-foreground mt-1">Real-time data</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Conversations
+                </p>
+                <p className="text-2xl font-bold text-foreground">
+                  {totalPrompts}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Real-time data
+                </p>
               </div>
               <MessageSquare className="w-8 h-8 text-primary" />
             </div>
@@ -207,9 +286,15 @@ export function Dashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Users</p>
-                <p className="text-2xl font-bold text-foreground">{totalUsers}</p>
-                <p className="text-xs text-muted-foreground mt-1">Users with queries</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Active Users
+                </p>
+                <p className="text-2xl font-bold text-foreground">
+                  {totalUsers}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Users with queries
+                </p>
               </div>
               <Users className="w-8 h-8 text-chart-2" />
             </div>
@@ -220,9 +305,15 @@ export function Dashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Rating</p>
-                <p className="text-2xl font-bold text-foreground">{avgRating > 0 ? avgRating.toFixed(1) : "No data"}</p>
-                <p className="text-xs text-muted-foreground mt-1">Real-time data</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Avg Rating
+                </p>
+                <p className="text-2xl font-bold text-foreground">
+                  {avgRating > 0 ? avgRating.toFixed(1) : "No data"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Real-time data
+                </p>
               </div>
               <Star className="w-8 h-8 text-chart-3" />
             </div>
@@ -233,17 +324,54 @@ export function Dashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Response Time</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {avgResponseTime > 0 ? `${avgResponseTime.toFixed(2)}s` : "No data"}
+                <p className="text-sm font-medium text-muted-foreground">
+                  Avg Response Time
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Real-time data</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {avgResponseTime > 0
+                    ? `${avgResponseTime.toFixed(2)}s`
+                    : "No data"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Real-time data
+                </p>
               </div>
               <Clock className="w-8 h-8 text-chart-4" />
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            Quick Actions
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Generate insights and documentation from your data
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <Button
+              onClick={handleGenerateFAQ}
+              disabled={generatingFaq || totalPrompts === 0}
+              className="gap-2"
+              variant="outline"
+            >
+              <HelpCircle className="w-4 h-4" />
+              {generatingFaq ? "Generating FAQ..." : "Generate FAQ"}
+            </Button>
+            {totalPrompts === 0 && (
+              <p className="text-sm text-muted-foreground self-center">
+                Start asking questions to generate your personalized FAQ
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Dashboard Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -267,7 +395,9 @@ export function Dashboard() {
                 <BarChart3 className="w-5 h-5 text-primary" />
                 Saved Visualizations
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Your saved charts and analysis views</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your saved charts and analysis views
+              </p>
             </div>
             <Button size="sm" className="gap-2" onClick={() => router.push('/visualize')}>
               <Plus className="w-4 h-4" />
@@ -286,8 +416,12 @@ export function Dashboard() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <CardTitle className="text-base font-medium line-clamp-1">{viz.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{viz.description}</p>
+                      <CardTitle className="text-base font-medium line-clamp-1">
+                        {viz.name}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                        {viz.description}
+                      </p>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -343,19 +477,26 @@ export function Dashboard() {
                         <Badge variant="outline" className="capitalize">
                           {viz.chart_type}
                         </Badge>
-                        <span className="text-muted-foreground">{new Date(viz.updated_at).toLocaleDateString()}</span>
+                        <span className="text-muted-foreground">
+                          {new Date(viz.updated_at).toLocaleDateString()}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">
-                          by {dashboardData?.users.find((u) => u.id === viz.created_by)?.name || "GOON"}
+                          by{" "}
+                          {dashboardData?.users.find(
+                            (u) => u.id === viz.created_by
+                          )?.name || "GOON"}
                         </span>
                       </div>
                     </div>
 
                     {/* Query Preview */}
                     <div className="bg-muted/30 rounded-md p-2">
-                      <p className="text-xs text-muted-foreground line-clamp-2 font-mono">"{viz.query}"</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 font-mono">
+                        "{viz.query}"
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -369,8 +510,12 @@ export function Dashboard() {
             >
               <CardContent className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
                 <Plus className="w-8 h-8 text-muted-foreground mb-2" />
-                <h3 className="font-medium text-foreground mb-1">Create New Visualization</h3>
-                <p className="text-sm text-muted-foreground">Ask a question to generate a new chart</p>
+                <h3 className="font-medium text-foreground mb-1">
+                  Create New Visualization
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Ask a question to generate a new chart
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -389,21 +534,31 @@ export function Dashboard() {
           <div className="space-y-3">
             {dashboardData && dashboardData.prompts.length > 0 ? (
               dashboardData.prompts.slice(0, 5).map((prompt, index) => {
-                const user = dashboardData.users.find(u => u.id === prompt.user_id)
-                const timeAgo = new Date(prompt.timestamp).toLocaleDateString()
+                const user = dashboardData.users.find(
+                  (u) => u.id === prompt.user_id
+                );
+                const timeAgo = new Date(prompt.timestamp).toLocaleDateString();
 
                 return (
-                  <div key={prompt.id} className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg">
+                  <div
+                    key={prompt.id}
+                    className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg"
+                  >
                     <div className="w-2 h-2 rounded-full bg-primary" />
                     <div className="flex-1">
                       <p className="text-sm text-foreground">
-                        <span className="font-medium">{user?.name || "GOON"}</span> submitted a prompt:{" "}
-                        <span className="font-medium">"{prompt.content.slice(0, 50)}..."</span>
+                        <span className="font-medium">
+                          {user?.name || "GOON"}
+                        </span>{" "}
+                        submitted a prompt:{" "}
+                        <span className="font-medium">
+                          "{prompt.content.slice(0, 50)}..."
+                        </span>
                       </p>
                       <p className="text-xs text-muted-foreground">{timeAgo}</p>
                     </div>
                   </div>
-                )
+                );
               })
             ) : (
               <div className="text-center py-4 text-muted-foreground">
@@ -421,6 +576,14 @@ export function Dashboard() {
         onRegenerate={handleRegenerate}
         visualization={viewingVisualization}
       />
+
+      {/* FAQ Modal */}
+      <FAQModal
+        isOpen={faqModalOpen}
+        onClose={() => setFaqModalOpen(false)}
+        faqContent={faqContent}
+        stats={faqStats}
+      />
     </div>
-  )
+  );
 }

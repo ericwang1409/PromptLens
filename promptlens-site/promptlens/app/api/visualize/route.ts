@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       openaiApiKey: process.env.OPENAI_API_KEY || '',
-      defaultThreshold: 0.1,
+      defaultThreshold: 0.3,
     });
 
     const result = await agent.run(query, { limit: 2000, userId: user.id });
