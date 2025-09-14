@@ -1,11 +1,28 @@
 """Simple FastAPI application."""
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from enum import Enum
 import openai
 import anthropic
 import httpx
+import os
+from supabase import create_client, Client
+import datetime
+from dotenv import load_dotenv
+load_dotenv()
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL", "")
+supabase_key = os.getenv("SUPABASE_API", "")
+supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+# Security
+security = HTTPBearer()
+
+# Import database and embedding services
 from database import get_database_service
 from embedding_service import get_embedding_service
 
@@ -21,9 +38,7 @@ class GenerateRequest(BaseModel):
     """Request model for text generation."""
     prompt: str = Field(..., description="The prompt to generate text from")
     provider: Provider = Field(..., description="LLM provider to use")
-    user_id: str = Field(..., description="User ID for authentication")
-    api_key: str = Field(..., description="API key for the provider")
-
+    api_key: str = Field(..., description="API key for the LLM provider (OpenAI, Anthropic, or XAI)")
     # Optional LLM parameters
     temperature: Optional[float] = Field(0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: Optional[int] = Field(1000, ge=1, le=8000, description="Maximum tokens to generate")
@@ -44,16 +59,43 @@ class GenerateResponse(BaseModel):
     similarity_score: Optional[float] = None
 
 
+# Authentication functions
+async def verify_api_key(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
+    """Verify API key and return user ID."""
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase not configured")
+    
+    token = credentials.credentials
+    
+    try:
+        # Check if it's a PromptLens API key
+        if token.startswith('pl_'):
+            result = supabase.table('user_api_keys').select('user_id').eq('api_key', token).eq('is_active', True).single().execute()
+            if result.data:
+                # Update last_used_at
+                supabase.table('user_api_keys').update({'last_used_at': datetime.datetime.utcnow().isoformat()}).eq('api_key', token).execute()
+                return result.data['user_id']       
+        
+        # Otherwise, try to verify as Supabase JWT
+        user = supabase.auth.get_user(token)
+        if user and user.user:
+            return user.user.id
+            
+    except Exception:
+        pass
+    
+    raise HTTPException(status_code=401, detail="Invalid API key")
+
+
 # LLM Service Classes
 class LLMService:
     """Base class for LLM services."""
 
     @staticmethod
-    async def generate_openai(request: GenerateRequest) -> GenerateResponse:
+    async def generate_openai(request: GenerateRequest, user_id: str) -> GenerateResponse:
         """Generate text using OpenAI API."""
         try:
             client = openai.AsyncOpenAI(api_key=request.api_key)
-
             # Default model selection
             model = request.model or "gpt-4o"
 
@@ -72,17 +114,16 @@ class LLMService:
                 provider="openai",
                 model_used=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
-                user_id=request.user_id
+                user_id=user_id
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"OpenAI API error: {str(e)}")
 
     @staticmethod
-    async def generate_anthropic(request: GenerateRequest) -> GenerateResponse:
+    async def generate_anthropic(request: GenerateRequest, user_id: str) -> GenerateResponse:
         """Generate text using Anthropic API."""
         try:
             client = anthropic.AsyncAnthropic(api_key=request.api_key)
-
             # Default model selection
             model = request.model or "claude-3-haiku-20240307"
 
@@ -99,13 +140,13 @@ class LLMService:
                 provider="anthropic",
                 model_used=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
-                user_id=request.user_id
+                user_id=user_id
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Anthropic API error: {str(e)}")
 
     @staticmethod
-    async def generate_xai(request: GenerateRequest) -> GenerateResponse:
+    async def generate_xai(request: GenerateRequest, user_id: str) -> GenerateResponse:
         """Generate text using XAI API."""
         try:
             # XAI uses OpenAI-compatible API
@@ -162,7 +203,7 @@ class LLMService:
                     provider="xai",
                     model_used=data.get("model", model),
                     usage=data.get("usage", {}),
-                    user_id=request.user_id
+                    user_id=user_id
                 )
 
         except Exception as e:
@@ -171,9 +212,18 @@ class LLMService:
 
 # Create FastAPI app
 app = FastAPI(
-    title="Simple API",
+    title="PromptLens API",
     version="1.0.0",
-    description="A simple FastAPI template"
+    description="API for PromptLens - LLM Data Insights Platform"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -190,7 +240,7 @@ async def health():
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest):
+async def generate(request: GenerateRequest, user_id: str = Depends(verify_api_key)):
     """
     Generate text using the specified LLM provider with embedding-based caching.
 
@@ -203,7 +253,7 @@ async def generate(request: GenerateRequest):
 
     Args:
         request: Generation request with prompt, provider, and parameters
-
+        user_id: Authenticated user ID from API key
     Returns:
         Generated text with metadata, including cache status
 
@@ -236,7 +286,7 @@ async def generate(request: GenerateRequest):
             # Store this query in database even though we're using cached response
             # Link it to the original cached query
             db_service.store_query(
-                user_id=request.user_id,
+                user_id=user_id,
                 prompt=request.prompt,
                 response=cached_query.response,
                 prompt_embedding=prompt_embedding,
@@ -249,7 +299,7 @@ async def generate(request: GenerateRequest):
                 provider=request.provider.value,
                 model_used="cached",
                 usage={"cached": True},
-                user_id=request.user_id,
+                user_id=user_id,
                 cached=True,
                 similarity_score=cached_query.similarity_score
             )
@@ -258,11 +308,11 @@ async def generate(request: GenerateRequest):
         llm_response = None
         match request.provider:
             case Provider.OPENAI:
-                llm_response = await LLMService.generate_openai(request)
+                llm_response = await LLMService.generate_openai(request, user_id)
             case Provider.ANTHROPIC:
-                llm_response = await LLMService.generate_anthropic(request)
+                llm_response = await LLMService.generate_anthropic(request, user_id)
             case Provider.XAI:
-                llm_response = await LLMService.generate_xai(request)
+                llm_response = await LLMService.generate_xai(request, user_id)
 
         if llm_response is None:
             raise HTTPException(status_code=500, detail="Failed to generate response")
@@ -272,7 +322,7 @@ async def generate(request: GenerateRequest):
 
         # Step 6: Store in database
         db_service.store_query(
-            user_id=request.user_id,
+            user_id=user_id,
             prompt=request.prompt,
             response=llm_response.generated_text,
             prompt_embedding=prompt_embedding,
