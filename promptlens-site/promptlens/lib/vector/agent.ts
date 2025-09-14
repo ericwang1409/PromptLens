@@ -50,7 +50,11 @@ class Agent {
   }
 
   async run(adminQuery: string, options?: { limit?: number; since?: Date; until?: Date }): Promise<AgentResult> {
-    const { graphType, usedField, keywords } = await this.decidePlan(adminQuery);
+    // const { graphType, usedField, keywords } = await this.decidePlan(adminQuery);
+    // Aggregate historical keywords to use as planning context
+    const topKeywords = await this.db.aggregateKeywords({ since: options?.since, until: options?.until, limit: 50 });
+    const contextKeywords = topKeywords.map(k => `${k.keyword} (${k.count})`).join(', ');
+    const { graphType, usedField, keywords } = await this.decidePlan(`${adminQuery}\n\nContext keywords (top): ${contextKeywords}`);
 
     // 1) Fetch records (lightweight, only needed fields) and ensure embeddings
     const records = await this.db.fetchQueries({
@@ -89,15 +93,38 @@ class Agent {
 
     const candidateEmbeddings: number[][] = candidates.map(c => c.e);
 
-    // Hierarchical matching using the keyword graph: start at root, then children, narrowing or branching
-    const matchedMap = this.hierarchicalSearch(termToEmbedding, candidateEmbeddings);
+    // First pass search over all candidates
+    const matchedMapFirst = this.hierarchicalSearch(termToEmbedding, candidateEmbeddings);
+    const matchedIndicesFirst = Array.from(new Set(Object.values(matchedMapFirst).flat()));
+    const matchedRecordsFirst: QueryRecord[] = matchedIndicesFirst.map((idx) => records[candidates[idx].i]);
 
-    const matchedIndices = Array.from(new Set(Object.values(matchedMap).flat()));
+    // Derive refined keywords from first-pass matches using LLM
+    const refinedKeywords = await this.refineKeywordsFromRecords(matchedRecordsFirst, usedField, 5, keywords, adminQuery);
 
-    const matchedRecords: QueryRecord[] = matchedIndices.map((idx) => records[candidates[idx].i]);
+    let finalMatchedMap: Record<string, number[]> = matchedMapFirst;
+    let finalMatchedIndices: number[] = matchedIndicesFirst;
 
-    // 4) Extract keywords and aggregate per graph type
-    const result = this.generateGraphDataFromMatches(graphType, matchedMap, records, candidates, usedField);
+    if (refinedKeywords.length > 0 && matchedIndicesFirst.length > 0) {
+      const refinedEmbeddings = await this.embedder.generateBatchEmbeddings(refinedKeywords);
+      const refinedTermToEmbedding = new Map<string, number[]>();
+      refinedKeywords.forEach((t, i) => refinedTermToEmbedding.set(t, refinedEmbeddings[i]));
+
+      // Restrict to first-pass matches to sharpen the search
+      const subsetEmbeddings = matchedIndicesFirst.map(idx => candidateEmbeddings[idx]);
+      const matchedMapSecondRel = this.hierarchicalSearch(refinedTermToEmbedding, subsetEmbeddings);
+
+      // Remap back to original candidate indices
+      const matchedMapSecond: Record<string, number[]> = {};
+      for (const [term, relIdxs] of Object.entries(matchedMapSecondRel)) {
+        matchedMapSecond[term] = relIdxs.map(rel => matchedIndicesFirst[rel]);
+      }
+
+      finalMatchedMap = matchedMapSecond;
+      finalMatchedIndices = Array.from(new Set(Object.values(matchedMapSecond).flat()));
+    }
+
+    // 4) Aggregate per graph type from final matches
+    const result = this.generateGraphDataFromMatches(graphType, finalMatchedMap, records, candidates, usedField);
 
     return {
       graphType,
@@ -107,9 +134,81 @@ class Agent {
         query: adminQuery,
         threshold: this.threshold,
         totalCandidates: candidateEmbeddings.length,
-        matchedCount: matchedRecords.length,
+        matchedCount: finalMatchedIndices.length,
       },
     };
+  }
+
+  private async refineKeywordsFromRecords(
+    records: QueryRecord[],
+    usedField: 'prompt' | 'response',
+    maxKeywords: number = 5,
+    originalKeywords: string[] = [],
+    originalPrompt: string = ''
+  ): Promise<string[]> {
+    if (!records.length) return [];
+
+    // Build candidate keywords from records.keywords (array or JSON/comma string)
+    const normalize = (k: string) => k.toLowerCase().trim().replace(/\s+/g, ' ');
+    const counts = new Map<string, number>();
+    for (const r of records) {
+      const raw: unknown = (r as any).keywords;
+      let kws: string[] = [];
+      if (Array.isArray(raw)) {
+        kws = raw.map(v => String(v));
+      } else if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) kws = parsed.map(v => String(v));
+          else kws = raw.split(',');
+        } catch {
+          kws = raw.split(',');
+        }
+      }
+      // Per-record dedupe to avoid overweighting repeated tokens in the same row
+      const seen = new Set<string>();
+      for (let kw of kws) {
+        kw = normalize(kw);
+        if (!kw) continue;
+        if (seen.has(kw)) continue;
+        seen.add(kw);
+        counts.set(kw, (counts.get(kw) || 0) + 1);
+      }
+    }
+
+    const candidates = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 150)
+      .map(([k, c]) => `${k} (${c})`);
+
+    // if (!candidates.length) return [];
+
+    const parser = StructuredOutputParser.fromZodSchema(
+      z.object({ keywords: z.array(z.string()).max(maxKeywords) })
+    );
+
+    const prompt = [
+      'You refine search categories from candidate keywords (with frequencies).',
+      originalPrompt ? `Original prompt: ${originalPrompt}` : 'Original prompt: (none)',
+      originalKeywords.length ? `Original query keywords: ${originalKeywords.join(', ')}` : 'Original query keywords: (none)',
+      `Choose a set of categories similar to the original query keywords that the user has requested that very closely match the original prompt and the candidate distribution. Return ${maxKeywords} or less categories.`,
+      'Return JSON: { "keywords": string[] }',
+      '',
+      'Candidate keywords (keyword (count)):',
+      candidates.join(', ')
+    ].join('\n');
+
+    console.log("prompt", prompt)
+
+    try {
+      const completion = await this.llm.invoke([{ role: 'user', content: prompt }] as any);
+      const parsed = await parser.parse((completion?.content as string) || '');
+      const set = new Set(parsed.keywords.map((k: string) => k.toLowerCase().trim()).filter(Boolean));
+      console.log("set", set)
+      return Array.from(set).slice(0, maxKeywords);
+    } catch {
+      return [];
+    }
   }
 
   private async decidePlan(query: string): Promise<{ graphType: GraphType; usedField: 'prompt' | 'response'; keywords: string[]; }> {
