@@ -16,7 +16,7 @@ load_dotenv()
 
 # Initialize Supabase client
 supabase_url = os.getenv("SUPABASE_URL", "")
-supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
+supabase_key = os.getenv("SUPABASE_API", "")
 supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
 # Security
