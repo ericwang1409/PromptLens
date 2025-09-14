@@ -3,6 +3,7 @@
 import pytest
 import uuid
 import os
+import random
 from dotenv import load_dotenv
 from database import get_database_service
 
@@ -34,6 +35,9 @@ class TestDatabaseService:
         response = "Machine learning is a subset of AI..."
         prompt_embedding = [0.1] * 1536
         response_embedding = [0.2] * 1536
+        model_used = "test"
+        tokens_used = 100
+        response_time_ms = 100
 
         # Store a query in real database
         query_id = db_service.store_query(
@@ -41,7 +45,11 @@ class TestDatabaseService:
             prompt=prompt,
             response=response,
             prompt_embedding=prompt_embedding,
-            response_embedding=response_embedding
+            response_embedding=response_embedding,
+            model_used=model_used,
+            tokens_used=tokens_used,
+            response_time_ms=response_time_ms,
+            rating=random.randint(2, 5)  # Test rating
         )
 
         # Verify we got an ID back

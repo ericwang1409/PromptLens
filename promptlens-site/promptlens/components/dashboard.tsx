@@ -1,25 +1,75 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChartContainer } from "@/components/charts/chart-container"
-import { mockSavedVisualizations, mockPrompts, mockResponses, mockUsers } from "@/lib/mock-data"
+import { mockSavedVisualizations } from "@/lib/mock-data"
+import { fetchDashboardData } from "@/lib/data-service"
 import { Plus, TrendingUp, Users, MessageSquare, Clock, Star, BarChart3, Eye, Edit, Trash2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import type { ChatPrompt, ChatResponse, User } from "@/lib/types"
 
 export function Dashboard() {
   const [selectedVisualization, setSelectedVisualization] = useState<string | null>(null)
+  const [dashboardData, setDashboardData] = useState<{
+    prompts: ChatPrompt[]
+    responses: ChatResponse[]
+    users: User[]
+    metrics: {
+      totalPrompts: number
+      totalUsers: number
+      avgRating: number
+      avgResponseTime: number
+      totalTokens: number
+      cacheHitRate: number
+      totalCachedQueries: number
+    }
+    chartData: {
+      dailyVolume: number[]
+      dayNames: string[]
+    }
+  } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Calculate key metrics
-  const totalPrompts = mockPrompts.length
-  const totalUsers = mockUsers.length
-  const avgRating = mockPrompts.reduce((sum, p) => sum + (p.metadata.satisfaction_rating || 0), 0) / totalPrompts
-  const totalTokens = mockResponses.reduce((sum, r) => sum + r.tokens_used, 0)
-  const avgResponseTime = mockResponses.reduce((sum, r) => sum + r.response_time, 0) / mockResponses.length
+  useEffect(() => {
+    async function loadData() {
+      setIsLoading(true)
+      try {
+        const data = await fetchDashboardData()
+        setDashboardData(data)
+      } catch (error) {
+        console.error('Error loading dashboard data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
-  // Mock chart data for dashboard
+    loadData()
+  }, [])
+
+  // Use real data if available, otherwise show loading state
+  const totalPrompts = dashboardData?.metrics.totalPrompts || 0
+  const totalUsers = dashboardData?.metrics.totalUsers || 0
+  const avgRating = dashboardData?.metrics.avgRating || 0
+  const avgResponseTime = dashboardData?.metrics.avgResponseTime || 0
+
+  // Use real cache hit data from the data service
+  const cacheHitRate = dashboardData?.metrics.cacheHitRate || 0
+  const cacheMissRate = 100 - cacheHitRate
+  const totalCachedQueries = dashboardData?.metrics.totalCachedQueries || 0
+
+  // Calculate ratings distribution from real data
+  const ratingsDistribution = [0, 0, 0, 0, 0] // [1-star, 2-star, 3-star, 4-star, 5-star]
+  dashboardData?.prompts.forEach(prompt => {
+    const rating = prompt.metadata.satisfaction_rating
+    if (rating && rating >= 1 && rating <= 5) {
+      ratingsDistribution[rating - 1]++
+    }
+  })
+
+  // Chart data using real data
   const dashboardCharts = [
     {
       id: "daily-volume",
@@ -27,11 +77,11 @@ export function Dashboard() {
       description: "Prompt submissions over the last 7 days",
       chartType: "line" as const,
       data: {
-        labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        labels: dashboardData?.chartData.dayNames || ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         datasets: [
           {
             label: "Prompts",
-            data: [12, 19, 15, 25, 22, 18, 28],
+            data: dashboardData?.chartData.dailyVolume || [0, 0, 0, 0, 0, 0, 0],
             borderColor: "oklch(0.65 0.15 35)",
             backgroundColor: "oklch(0.65 0.15 35 / 0.1)",
             fill: true,
@@ -40,48 +90,70 @@ export function Dashboard() {
       },
     },
     {
-      id: "category-distribution",
-      title: "Prompt Categories",
-      description: "Distribution of prompt types",
+      id: "cache-hit-rate",
+      title: "Cache Hit Percentage",
+      description: `${cacheHitRate.toFixed(1)}% cache hit rate from ${totalPrompts} queries`,
       chartType: "pie" as const,
       data: {
-        labels: ["Analysis", "Technical", "Creative", "Question", "Other"],
+        labels: ["Cache Hits", "Cache Misses"],
         datasets: [
           {
-            data: [35, 28, 18, 12, 7],
+            label: "Cache Performance",
+            data: [cacheHitRate, cacheMissRate],
             backgroundColor: [
-              "oklch(0.65 0.15 35)",
-              "oklch(0.55 0.12 200)",
-              "oklch(0.45 0.08 150)",
-              "oklch(0.7 0.1 60)",
-              "oklch(0.5 0.08 300)",
+              "oklch(0.65 0.15 120)", // Green for hits
+              "oklch(0.65 0.15 0)",   // Red for misses
             ],
           },
         ],
       },
     },
     {
-      id: "department-usage",
-      title: "Department Usage",
-      description: "Average prompts per user by department",
+      id: "ratings-distribution",
+      title: "Rating Distribution",
+      description: "User satisfaction ratings breakdown",
       chartType: "bar" as const,
       data: {
-        labels: ["Engineering", "Data Science", "Marketing", "Sales"],
+        labels: ["1 Star", "2 Stars", "3 Stars", "4 Stars", "5 Stars"],
         datasets: [
           {
-            label: "Avg Prompts/User",
-            data: [12.1, 8.5, 6.2, 4.8],
+            label: "Number of Ratings",
+            data: ratingsDistribution,
             backgroundColor: [
-              "oklch(0.65 0.15 35)",
-              "oklch(0.55 0.12 200)",
-              "oklch(0.45 0.08 150)",
-              "oklch(0.7 0.1 60)",
+              "oklch(0.65 0.15 0)",   // Red for 1 star
+              "oklch(0.65 0.15 30)",  // Orange for 2 stars
+              "oklch(0.65 0.15 60)",  // Yellow for 3 stars
+              "oklch(0.65 0.15 120)", // Light green for 4 stars
+              "oklch(0.65 0.15 140)", // Green for 5 stars
             ],
           },
         ],
       },
     },
   ]
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="bg-gradient-to-br from-muted/5 to-muted/10">
+              <CardContent className="p-4">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-8 bg-muted rounded w-1/2 mb-1"></div>
+                  <div className="h-3 bg-muted rounded w-2/3"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -93,7 +165,7 @@ export function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Conversations</p>
                 <p className="text-2xl font-bold text-foreground">{totalPrompts}</p>
-                <p className="text-xs text-muted-foreground mt-1">+12% from last week</p>
+                <p className="text-xs text-muted-foreground mt-1">Real-time data</p>
               </div>
               <MessageSquare className="w-8 h-8 text-primary" />
             </div>
@@ -106,7 +178,7 @@ export function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Users</p>
                 <p className="text-2xl font-bold text-foreground">{totalUsers}</p>
-                <p className="text-xs text-muted-foreground mt-1">+3 new this week</p>
+                <p className="text-xs text-muted-foreground mt-1">Users with queries</p>
               </div>
               <Users className="w-8 h-8 text-chart-2" />
             </div>
@@ -118,8 +190,8 @@ export function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Rating</p>
-                <p className="text-2xl font-bold text-foreground">{avgRating.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground mt-1">+0.2 from last week</p>
+                <p className="text-2xl font-bold text-foreground">{avgRating > 0 ? avgRating.toFixed(1) : "No data"}</p>
+                <p className="text-xs text-muted-foreground mt-1">Real-time data</p>
               </div>
               <Star className="w-8 h-8 text-chart-3" />
             </div>
@@ -131,8 +203,10 @@ export function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Response Time</p>
-                <p className="text-2xl font-bold text-foreground">{avgResponseTime.toFixed(1)}s</p>
-                <p className="text-xs text-muted-foreground mt-1">-0.3s improvement</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {avgResponseTime > 0 ? `${avgResponseTime.toFixed(2)}s` : "No data"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Real-time data</p>
               </div>
               <Clock className="w-8 h-8 text-chart-4" />
             </div>
@@ -233,7 +307,7 @@ export function Dashboard() {
                           </Badge>
                         )}
                         <span className="text-xs text-muted-foreground">
-                          by {mockUsers.find((u) => u.id === viz.created_by)?.name || "Unknown"}
+                          by {dashboardData?.users.find((u) => u.id === viz.created_by)?.name || "GOON"}
                         </span>
                       </div>
                     </div>
@@ -269,44 +343,29 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[
-              {
-                action: "Created visualization",
-                item: "Daily Prompt Volume",
-                user: "Alice Johnson",
-                time: "2 hours ago",
-                type: "create",
-              },
-              {
-                action: "Updated dashboard",
-                item: "User Engagement by Department",
-                user: "Carol Davis",
-                time: "4 hours ago",
-                type: "update",
-              },
-              {
-                action: "Shared visualization",
-                item: "Response Time Trends",
-                user: "Bob Chen",
-                time: "1 day ago",
-                type: "share",
-              },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg">
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    activity.type === "create" ? "bg-primary" : activity.type === "update" ? "bg-chart-2" : "bg-chart-3"
-                  }`}
-                />
-                <div className="flex-1">
-                  <p className="text-sm text-foreground">
-                    <span className="font-medium">{activity.user}</span> {activity.action}{" "}
-                    <span className="font-medium">"{activity.item}"</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">{activity.time}</p>
-                </div>
+            {dashboardData && dashboardData.prompts.length > 0 ? (
+              dashboardData.prompts.slice(0, 5).map((prompt, index) => {
+                const user = dashboardData.users.find(u => u.id === prompt.user_id)
+                const timeAgo = new Date(prompt.timestamp).toLocaleDateString()
+
+                return (
+                  <div key={prompt.id} className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    <div className="flex-1">
+                      <p className="text-sm text-foreground">
+                        <span className="font-medium">{user?.name || "GOON"}</span> submitted a prompt:{" "}
+                        <span className="font-medium">"{prompt.content.slice(0, 50)}..."</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">{timeAgo}</p>
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                No recent activity available
               </div>
-            ))}
+            )}
           </div>
         </CardContent>
       </Card>

@@ -64,6 +64,50 @@ export type Database = {
           updated_at?: string
         }
       }
+      queries: {
+        Row: {
+          id: string
+          user_id: string
+          prompt: string
+          response: string
+          prompt_embedding: number[]
+          response_embedding: number[]
+          created_at: string
+          cached_query_id?: string
+          model_used?: string
+          tokens_used?: number
+          response_time_ms?: number
+          rating?: number
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          prompt: string
+          response: string
+          prompt_embedding: number[]
+          response_embedding: number[]
+          created_at?: string
+          cached_query_id?: string
+          model_used?: string
+          tokens_used?: number
+          response_time_ms?: number
+          rating?: number
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          prompt?: string
+          response?: string
+          prompt_embedding?: number[]
+          response_embedding?: number[]
+          created_at?: string
+          cached_query_id?: string
+          model_used?: string
+          tokens_used?: number
+          response_time_ms?: number
+          rating?: number
+        }
+      }
     }
   }
 }
