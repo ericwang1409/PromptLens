@@ -55,7 +55,7 @@ class Agent {
     // Aggregate historical keywords to use as planning context
     const topKeywords = await this.db.aggregateKeywords({ since: options?.since, until: options?.until, limit: 50, userId: options?.userId });
     const contextKeywords = topKeywords.map(k => `${k.keyword} (${k.count})`).join(', ');
-    const { graphType, usedField, keywords } = await this.decidePlan(`${adminQuery}\n\nContext keywords (top): ${contextKeywords}`);
+    const { graphType, usedField, keywords } = await this.decidePlan(adminQuery);
 
     console.log("graphType", graphType)
 
@@ -230,19 +230,20 @@ class Agent {
       'You refine search categories from candidate keywords (with frequencies).',
       originalPrompt ? `Original prompt: ${originalPrompt}` : 'Original prompt: (none)',
       originalKeywords.length ? `Original query categories/topics: ${originalKeywords.join(', ')}` : 'Original query categories/topics: (none)',
-      'If the original query categories/topics are empty, return an empty keywords list.',
-      'If you deem that the original query categories/topics are sufficient, return the original query categories/topics.',
+      'If the original query categories/topics are empty, based on the admin query, create a set of categories/topics, minimizing the number of categories chosen, that cover what the user has requested to be visualized and populate the keywords list with the categories/topics.',
+      'If you deem that the original query categories/topics cover the range of keywords, return the original query categories/topics.',
       `Otherwise, choose a set of categories/topics related to the original query categories/topics, minimizing the number of categories/topics chosen, based on the original prompt, original query categories/topics, and candidate keywords.`,
-      'Return JSON: { "keywords": string[] }',
       '',
       'Candidate keywords (keyword (count)):',
-      candidates.join(', ')
+      candidates.join(', '),
+      `Return JSON in this schema: ${parser.getFormatInstructions()}`,
     ].join('\n');
 
-    console.log("candidates", candidates)
+    console.log("prompt", prompt)
 
     try {
       const completion = await this.llm.invoke([{ role: 'user', content: prompt }] as any);
+      console.log("completion", completion.content)
       const parsed = await parser.parse((completion?.content as string) || '');
       const set = new Set(parsed.keywords.map((k: string) => k.toLowerCase().trim()).filter(Boolean));
 
@@ -251,6 +252,7 @@ class Agent {
       console.log("set", set)
       return Array.from(set).slice(0, maxKeywords);
     } catch {
+      console.log("error")
       return [];
     }
   }
@@ -271,12 +273,14 @@ class Agent {
       'Otherwise, you should choose pie as graphType.',
       'You are also able to choose between prompt and response as usedField.',
       'Check if the user has requested any categories/topics in the query.',
-      'If the user has requested categories, choose a set of categories/topics, minimizing the number of categories chosen, that the user has requested to be visualized and populate the keywords list with the categories/topics. If a number of categories/topics is mentioned, choose that many categories.',
-      'If the user has not requested any categories/topics (e.g. "visualize all of the data" or "show me daily prompt volume"), return an empty keywords list.',
-      'You should not include the words prompt, prompts, response or responses in the graph.',
+      'If the admin query has not requested any specific categories/topics (e.g. "show me daily prompt volume" or "what are the most common prompt categories"), return an empty keywords list.',
+      'Otherwise, if the admin query has requested specific categories/topics, based on the admin query, create a set of categories/topics, minimizing the number of categories chosen, that cover what the user has requested to be visualized and populate the keywords list with the categories/topics. If a number of categories/topics is mentioned, choose that many categories. If the list of keywords is not specific to certain categories/topics, return an empty keywords list.',
+      'You should not include the words prompt, prompts, response or responses.',
       `Admin query: "${query}"`,
       `Return JSON in this schema: ${parser.getFormatInstructions()}`
     ].join('\n');
+
+    console.log("prompt", prompt)
 
     const completion = await this.llm.invoke([{ role: 'user', content: prompt }] as any);
     try {
