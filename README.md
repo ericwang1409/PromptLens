@@ -12,6 +12,8 @@
 ### 🧠 **1. AI Chat Analytics**
 - **Conversation Tracking**: Records all AI prompts and responses with full metadata
 - **Vector Similarity Search**: Uses embeddings to find similar conversations and responses
+- **Novel NLP Approach**: Iteratively increases the amount of context the LLM has until accurate categorization is achieved
+- **Keyword Selection**: Algorithmically selected relevant keyword for fast context and accurate embeddings
 - **Smart Caching**: Reuses similar responses to reduce API costs and improve response times
 - **Multi-LLM Support**: Works with OpenAI, Anthropic Claude, and XAI (Grok) models
 - **Reduce Repeated Requests** Automatically generate markdown files for commonly asked questions to reduce costs and environmental impact
