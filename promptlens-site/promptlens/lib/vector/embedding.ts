@@ -23,7 +23,7 @@ class EmbeddingService {
     };
 
     if (!this.config.apiKey) {
-      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it in config.');
+      throw new Error('OpenAI API key is required. Set NEXT_PUBLIC_OPENAI_API_KEY environment variable or pass it in config.');
     }
 
     this.client = new OpenAI({
@@ -36,7 +36,7 @@ class EmbeddingService {
   async generateEmbedding(text: string): Promise<EmbeddingResult> {
     try {
       const cleanText = this.cleanText(text);
-      
+
       if (!cleanText.trim()) {
         throw new Error('Input text cannot be empty');
       }
@@ -52,7 +52,7 @@ class EmbeddingService {
       }
 
       const embeddingData = response.data[0];
-      
+
       return {
         embedding: embeddingData.embedding,
         tokens: response.usage?.total_tokens || 0
@@ -96,7 +96,7 @@ class EmbeddingService {
 
   updateConfig(newConfig: Partial<EmbeddingConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    
+
     if (newConfig.apiKey) {
       this.client = new OpenAI({
         apiKey: this.config.apiKey,
@@ -112,8 +112,8 @@ class EmbeddingService {
   }
 }
 
-export { 
-  EmbeddingService, 
-  type EmbeddingConfig, 
+export {
+  EmbeddingService,
+  type EmbeddingConfig,
   type EmbeddingResult
 };
