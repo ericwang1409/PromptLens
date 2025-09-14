@@ -71,7 +71,7 @@ class Agent {
 
     // 2) Build a query embedding for the adminQuery
     // Embed keyword graph nodes in batches
-    const keyTerms = keywords.length ? keywords : [adminQuery];
+    const keyTerms = keywords.length ? keywords : [];
 
     const keywordEmbeddings = await this.embedder.generateBatchEmbeddings(keyTerms);
 
@@ -97,7 +97,7 @@ class Agent {
     const candidateEmbeddings: number[][] = candidates.map(c => c.e);
 
     // First pass search over all candidates
-    const matchedMapFirst = this.hierarchicalSearch(termToEmbedding, candidateEmbeddings);
+    const matchedMapFirst = this.search(termToEmbedding, candidateEmbeddings);
     const matchedIndicesFirst = Array.from(new Set(Object.values(matchedMapFirst).flat()));
     const matchedRecordsFirst: QueryRecord[] = matchedIndicesFirst.map((idx) => records[candidates[idx].i]);
 
@@ -114,7 +114,7 @@ class Agent {
 
       // Restrict to first-pass matches to sharpen the search
       const subsetEmbeddings = matchedIndicesFirst.map(idx => candidateEmbeddings[idx]);
-      const matchedMapSecondRel = this.hierarchicalSearch(refinedTermToEmbedding, subsetEmbeddings);
+      const matchedMapSecondRel = this.search(refinedTermToEmbedding, subsetEmbeddings);
 
       // Remap back to original candidate indices
       const matchedMapSecond: Record<string, number[]> = {};
@@ -193,9 +193,10 @@ class Agent {
     const prompt = [
       'You refine search categories from candidate keywords (with frequencies).',
       originalPrompt ? `Original prompt: ${originalPrompt}` : 'Original prompt: (none)',
-      originalKeywords.length ? `Original query keywords: ${originalKeywords.join(', ')}` : 'Original query keywords: (none)',
-      'If the original query keywords are empty, return an empty keywords list.',
-      `Otherwise, choose a set of categories similar to the original query keywords that the user has requested that very closely match the original prompt and the candidate distribution. Return ${maxKeywords} or less categories.`,
+      originalKeywords.length ? `Original query categories/topics: ${originalKeywords.join(', ')}` : 'Original query categories/topics: (none)',
+      'If the original query categories/topics are empty, return an empty keywords list.',
+      'If you deem that the original query categories/topics are sufficient, return the original query categories/topics.',
+      `Otherwise, choose a set of categories/topics related to the original query categories/topics, minimizing the number of categories/topics chosen, based on the original prompt, original query categories/topics, and candidate keywords.`,
       'Return JSON: { "keywords": string[] }',
       '',
       'Candidate keywords (keyword (count)):',
@@ -231,9 +232,9 @@ class Agent {
       'If you are working with any time series data, you should choose line as graphType.',
       'Otherwise, you should choose pie as graphType.',
       'You are also able to choose between prompt and response as usedField.',
-      'Check if the user has requested any categories in the query.',
-      'If the user has requested categories, choose a set of categories that the user has requested to be visualized and populate the keywords list with the categories. If a number of categories is mentioned, choose that many categories. Otherwise, choose 5 or less categories.',
-      'If the user has not requested any categories (e.g. "visualize the data" or "show me daily prompt volume"), return an empty keywords list.',
+      'Check if the user has requested any categories/topics in the query.',
+      'If the user has requested categories, choose a set of categories/topics, minimizing the number of categories chosen, that the user has requested to be visualized and populate the keywords list with the categories. If a number of categories is mentioned, choose that many categories.',
+      'If the user has not requested any categories/topics (e.g. "visualize all of the data" or "show me daily prompt volume"), return an empty keywords list.',
       'You should not include the words prompt, prompts, response or responses in the graph.',
       `Admin query: "${query}"`,
       `Return JSON in this schema: ${parser.getFormatInstructions()}`
@@ -249,13 +250,18 @@ class Agent {
     }
   }
 
-  private hierarchicalSearch(
+  private search(
     termToEmbedding: Map<string, number[]>,
     candidateEmbeddings: number[][]
   ): Record<string, number[]> {
     const results: Record<string, number[]> = {};
     const terms = Array.from(termToEmbedding.keys());
-    if (terms.length === 0) return results;
+    console.log("terms", terms)
+    if (terms.length === 0) {
+      // No query terms: include all candidates under a single bucket
+      results["all"] = candidateEmbeddings.map((_, idx) => idx);
+      return results;
+    }
     const embeddings = terms.map(t => termToEmbedding.get(t)!);
     const matches = this.matcher.batchThresholdSearch(embeddings, candidateEmbeddings, this.threshold) || [];
     terms.forEach((term, idx) => {
