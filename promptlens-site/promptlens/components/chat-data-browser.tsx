@@ -385,7 +385,7 @@ export function ChatDataBrowser() {
                   <div className="flex gap-4 pl-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <TrendingUp className="w-3 h-3" />
-                      {response.tokens_used > 0 ? `${response.tokens_used} tokens` : "No token data"}
+                      {response.tokens_used >= 0 ? `${response.tokens_used} tokens` : "No token data"}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
