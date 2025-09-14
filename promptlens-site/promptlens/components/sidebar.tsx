@@ -48,7 +48,7 @@ export function Sidebar() {
       }
 
       try {
-        const history = await fetchQueryHistory(user.id, 10, undefined, showFavorites);
+        const history = await fetchQueryHistory(user.id, 4, undefined, showFavorites);
         setQueryHistory(history);
       } catch (error) {
         console.error('Error loading query history:', error);
@@ -140,7 +140,13 @@ export function Sidebar() {
               >
                 <Star className={`w-3 h-3 ${showFavorites ? 'text-yellow-500 fill-current' : 'text-muted-foreground'}`} />
               </Button>
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Add new query">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                title="Add new query"
+                onClick={() => router.push('/visualize')}
+              >
                 <Plus className="w-3 h-3" />
               </Button>
             </div>
