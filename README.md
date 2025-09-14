@@ -24,17 +24,11 @@
 - **User Behavior Analysis**: Understand how different users interact with AI
 - **Cost Optimization**: Identify opportunities to reduce API costs through caching
 
-### �� **4. Chat Interface (ClueLEE)**
-- **Modern Chat UI**: Clean, ChatGPT-like interface for direct AI conversations
-- **Multi-Provider Support**: Switch between different AI models seamlessly
-- **Conversation History**: Save and manage chat sessions
-- **Real-time Responses**: Fast, streaming responses from AI models
-
 ## **Why It's Useful**
 
 ### �� **For Organizations**
 - **Cost Optimization**: Reduce AI API costs by 30-50% through intelligent caching
-- **Quality Assurance**: Monitor AI response quality and consistency
+- **Quality Assurance**: Monitor AI response quality and consistency, helping to improve system prompts, documentation, etc.
 - **Usage Insights**: Understand which AI features are most valuable
 - **Performance Monitoring**: Track response times and identify bottlenecks
 
@@ -108,10 +102,7 @@ embedding = await openai.embeddings.create(
 #### **3. Natural Language Query Processing**
 ```typescript
 // Converts "Show me daily trends" into structured data
-const agent = new Agent({
-  supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_KEY
-});
+
 const result = await agent.run("Show me daily trends");
 ```
 
