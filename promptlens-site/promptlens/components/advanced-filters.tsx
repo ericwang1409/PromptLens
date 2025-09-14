@@ -167,7 +167,7 @@ export function AdvancedFilters({ onFiltersChange, availableUsers, className }: 
             </div>
 
             {/* Categories */}
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label className="text-sm font-medium">Categories</Label>
               <div className="flex flex-wrap gap-1">
                 {categories.map((category) => (
@@ -185,7 +185,7 @@ export function AdvancedFilters({ onFiltersChange, availableUsers, className }: 
                   </Badge>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             {/* Users */}
             <div className="space-y-2">

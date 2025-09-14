@@ -374,7 +374,7 @@ export function NaturalLanguageQuery() {
           </Card>
 
           {/* Insights */}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Lightbulb className="w-5 h-5 text-chart-4" />
@@ -394,7 +394,7 @@ export function NaturalLanguageQuery() {
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Action Buttons */}
           <div className="flex gap-2">
