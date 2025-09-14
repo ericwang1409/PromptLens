@@ -120,8 +120,10 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
+  html, body {
     @apply bg-background text-foreground font-sans;
+    height: 100%;
+    overflow: hidden; /* Prevent body scrolling */
   }
 
   /* Added custom scrollbar styling for Claude-like feel */

@@ -17,6 +17,7 @@ class SimilarQuery(BaseModel):
     prompt: str
     response: str
     similarity_score: float
+    keywords: List[str] = []
 
 
 class DatabaseService:
@@ -36,20 +37,36 @@ class DatabaseService:
         response: str,
         prompt_embedding: List[float],
         response_embedding: List[float],
-        cached_query_id: str = None
+        cached_query_id: str = None,
+        model_used: str = 'unknown',
+        tokens_used: int = 0,
+        response_time_ms: int = 0,
+        rating: int = None,
+        keywords: List[str] = None
     ) -> str:
-        """Store a query with its embeddings in the database."""
+        """Store a query with its embeddings and metadata in the database."""
         query_data = {
             'user_id': user_id,
             'prompt': prompt,
             'response': response,
             'prompt_embedding': prompt_embedding,
-            'response_embedding': response_embedding
+            'response_embedding': response_embedding,
+            'model_used': model_used,
+            'tokens_used': tokens_used,
+            'response_time_ms': response_time_ms
         }
 
         # Add cached_query_id if provided
         if cached_query_id:
             query_data['cached_query_id'] = cached_query_id
+
+        # Add rating if provided
+        if rating is not None:
+            query_data['rating'] = rating
+
+        # Add keywords if provided
+        if keywords is not None:
+            query_data['keywords'] = keywords
 
         result = self.supabase.table('queries').insert(query_data).execute()
 
@@ -75,7 +92,8 @@ class DatabaseService:
                 user_id=row['user_id'],
                 prompt=row['prompt'],
                 response=row['response'],
-                similarity_score=row['similarity']
+                similarity_score=row['similarity'],
+                keywords=row.get('keywords', [])
             )
             for row in result.data
         ]

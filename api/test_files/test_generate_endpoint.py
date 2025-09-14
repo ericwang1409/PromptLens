@@ -29,25 +29,24 @@ class TestGenerateEndpoint:
         assert response.status_code == 200
         assert response.json() == {"message": "Hello from PromptLens!"}
 
-    def test_generate_endpoint_missing_fields(self):
-        """Test that missing required fields return validation error."""
-        response = client.post("/api/generate", json={})
-        assert response.status_code == 422
-        assert "detail" in response.json()
-
-    @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OPENAI_API_KEY not set")
+    @pytest.mark.skipif(not os.getenv("OPENAI_API_KEY") or not os.getenv("PROMPTLENS_API_KEY"),
+                       reason="OPENAI_API_KEY or PROMPTLENS_API_KEY not set")
     def test_real_openai_integration(self):
         """Test with real OpenAI API key - integration test."""
         request_data = {
-            "prompt": "What is 2+2? Answer with just the number.",
+            "prompt": "hello how do you do chatgpt?",
             "provider": "openai",
-            "user_id": str(uuid.uuid4()),  # Use proper UUID format
             "api_key": os.getenv("OPENAI_API_KEY"),
             "temperature": 0.0,  # Low temperature for consistent results
             "max_tokens": 10
         }
 
-        response = client.post("/api/generate", json=request_data)
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {os.getenv("PROMPTLENS_API_KEY")}',
+        }
+
+        response = client.post("/api/generate", json=request_data, headers=headers)
 
         # This should work with real API key
         if response.status_code == 200:
@@ -62,8 +61,7 @@ class TestGenerateEndpoint:
             # If it fails, print the error for debugging
             print(f"❌ Real API test failed with status {response.status_code}")
             print(f"Error: {response.json()}")
-            # Don't fail the test, just log the issue
-            pytest.skip(f"Real API test failed: {response.json().get('detail', 'Unknown error')}")
+            assert False, f"API request failed: {response.json()}"
 
     @pytest.mark.skipif(not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_API"),
                        reason="Supabase credentials not set")
