@@ -34,6 +34,7 @@ class DbTooling {
       'id',
       'user_id',
       'created_at',
+      'keywords',
       fields === 'response' ? null : 'prompt',
       fields === 'response' ? null : 'prompt_embedding',
       fields === 'prompt' ? null : 'response',

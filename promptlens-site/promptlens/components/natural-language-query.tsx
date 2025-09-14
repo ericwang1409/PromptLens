@@ -38,6 +38,9 @@ export function NaturalLanguageQuery() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [segments, setSegments] = useState<any>(null);
+  const [details, setDetails] = useState<Array<{ id: string; user_id: string; created_at: string; prompt: string | null; response: string | null }>>([]);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
 
   const suggestions: QuerySuggestion[] = [
     {
@@ -103,6 +106,7 @@ export function NaturalLanguageQuery() {
       };
 
       setResult(next);
+      setSegments((data as any)?.segments || null);
     } catch (e: any) {
       setResult({
         query: queryText,
@@ -219,7 +223,71 @@ export function NaturalLanguageQuery() {
             description={result.interpretation}
             chartType={result.chartType}
             data={result.data}
+            onSegmentClick={async (segment) => {
+              try {
+                setIsDetailsLoading(true);
+                setDetails([]);
+                // Client-side filter using IDs from precomputed segments in state
+                const segs = segments;
+                let ids: string[] = [];
+                if (result.chartType === 'pie') {
+                  ids = segs?.pie?.[segment.label] || [];
+                } else if (result.chartType === 'line') {
+                  const day = (segment.timestamp || '').slice(0, 10);
+                  ids = (segs?.line?.[day]?.[segment.label] || []) as string[];
+                } else if (result.chartType === 'bar') {
+                  ids = (segs?.bar?.[segment.group]?.[segment.label] || []) as string[];
+                }
+
+                if (!ids || ids.length === 0) {
+                  setDetails([]);
+                  return;
+                }
+
+                const res = await fetch(`/api/visualize/records`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session?.access_token}`,
+                  },
+                  body: JSON.stringify({ ids })
+                });
+                const detailsData = await res.json();
+                if (!res.ok) throw new Error(detailsData?.error || 'Failed to fetch records');
+                setDetails(detailsData.items || []);
+              } catch (e) {
+                setDetails([]);
+              } finally {
+                setIsDetailsLoading(false);
+              }
+            }}
           />
+
+          {/* Details Drawer */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                Matching Prompts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isDetailsLoading ? (
+                <div className="text-sm text-muted-foreground">Loading details...</div>
+              ) : details.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Click a chart segment to view prompts.</div>
+              ) : (
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {details.map((d) => (
+                    <div key={d.id} className="p-3 rounded-md border bg-background/50">
+                      <div className="text-[11px] text-muted-foreground mb-1">{new Date(d.created_at).toLocaleString()} • {d.user_id}</div>
+                      {d.prompt && (<div className="text-sm text-foreground whitespace-pre-wrap"><strong>Prompt:</strong> {d.prompt}</div>)}
+                      {d.response && (<div className="text-sm text-foreground/80 whitespace-pre-wrap mt-1"><strong>Response:</strong> {d.response}</div>)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Insights */}
           <Card>

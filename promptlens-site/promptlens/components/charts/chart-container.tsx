@@ -37,9 +37,10 @@ interface ChartContainerProps {
   chartType: "line" | "bar" | "pie" | "scatter"
   data: ChartData
   className?: string
+  onSegmentClick?: (segment: any) => void
 }
 
-export function ChartContainer({ title, description, chartType, data, className }: ChartContainerProps) {
+export function ChartContainer({ title, description, chartType, data, className, onSegmentClick }: ChartContainerProps) {
   // Transform data for Recharts format
   const transformedData = data.labels.map((label, index) => {
     const point: any = { name: label }
@@ -63,7 +64,15 @@ export function ChartContainer({ title, description, chartType, data, className 
       case "line":
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={transformedData}>
+            <LineChart
+              data={transformedData}
+              onClick={(state: any) => {
+                if (!onSegmentClick) return
+                const timestamp = state?.activeLabel
+                const label = state?.activePayload?.[0]?.dataKey
+                if (timestamp) onSegmentClick({ type: 'line', timestamp, label })
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 85)" />
               <XAxis dataKey="name" stroke="oklch(0.55 0.01 85)" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="oklch(0.55 0.01 85)" fontSize={12} tickLine={false} axisLine={false} />
@@ -94,7 +103,15 @@ export function ChartContainer({ title, description, chartType, data, className 
       case "bar":
         return (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={transformedData}>
+            <BarChart
+              data={transformedData}
+              onClick={(state: any) => {
+                if (!onSegmentClick) return
+                const group = state?.activeLabel
+                const label = state?.activePayload?.[0]?.dataKey
+                if (group && label) onSegmentClick({ type: 'bar', group, label })
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 85)" />
               <XAxis dataKey="name" stroke="oklch(0.55 0.01 85)" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="oklch(0.55 0.01 85)" fontSize={12} tickLine={false} axisLine={false} />
@@ -138,6 +155,11 @@ export function ChartContainer({ title, description, chartType, data, className 
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
+                onClick={(e: any) => {
+                  if (!onSegmentClick) return
+                  const label = e?.name
+                  onSegmentClick({ type: 'pie', label })
+                }}
               >
                 {pieData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />

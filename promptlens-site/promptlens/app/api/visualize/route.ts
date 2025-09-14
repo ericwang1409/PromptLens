@@ -56,7 +56,8 @@ export async function POST(req: Request) {
       title: suggestTitle(query, chartType),
       description: `Visualization for: "${query}"`,
       chartType,
-      data
+      data,
+      segments: result.segments
     });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || 'Unknown error' }), { status: 500 });
