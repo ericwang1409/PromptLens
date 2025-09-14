@@ -1,178 +1,62 @@
-# Dummy GPT - Simple LLM Chatbot
+# ClueLEE - AI Chatbot
 
-A clean and minimalistic chatbot interface built with Next.js, React, and Tailwind CSS. This app provides a ChatGPT-like interface for querying your custom LLM API.
+A modern AI chatbot interface built with Next.js, Tailwind CSS, and shadcn/ui components. This app connects to your FastAPI backend to provide intelligent conversations powered by Anthropic's Claude AI.
 
 ## Features
 
-- 🎨 Clean, minimalistic UI similar to ChatGPT
-- 💬 Real-time chat interface with message history
-- ⚡ Fast and responsive design
-- 🔄 Loading states and error handling
-- 📱 Mobile-friendly responsive design
-- 🧹 Clear conversation functionality
+- 🤖 **Anthropic Claude Integration** - Powered by Claude AI via your FastAPI backend
+- 💬 **Real-time Chat Interface** - Clean, modern chat UI similar to ChatGPT
+- 🎨 **Modern Design** - Built with shadcn/ui components and Tailwind CSS
+- 🔐 **Secure API Integration** - Uses environment variables for API keys
+- 📱 **Responsive Design** - Works on desktop and mobile devices
 
 ## Getting Started
 
-1. **Set up environment variables**:
-   Create a `.env.local` file in the root directory:
-   ```env
-   # Anthropic API Configuration
-   ANTHROPIC_API_KEY=your_anthropic_api_key_here
-   
-   # PromptLens API Configuration
-   PROMPTLENS_API_KEY=your_promptlens_api_key_here
-   
-   # FastAPI Backend Configuration (optional)
-   FASTAPI_BASE_URL=https://prompt-lens-c4218b9ba45e.herokuapp.com
-   ```
+### 1. Environment Setup
 
-2. **Get your API keys**:
-   - **Anthropic API key**: Go to [console.anthropic.com](https://console.anthropic.com/)
-     - Sign up or log in
-     - Create a new API key
-     - Copy the key and paste it as `ANTHROPIC_API_KEY` in your `.env.local` file
-   
-   - **PromptLens API key**: Get this from your PromptLens account
-     - This is used to authenticate with your FastAPI backend
-     - Copy the key and paste it as `PROMPTLENS_API_KEY` in your `.env.local` file
+Create a `.env.local` file in the root directory with the following variables:
 
-3. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-4. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
-
-5. **Open [http://localhost:3000](http://localhost:3000) in your browser**.
-
-## Integration with FastAPI Backend
-
-This app is already configured to work with the FastAPI backend defined in `main.py`. The integration includes:
-
-### Features
-- **Multi-Provider Support**: OpenAI, Anthropic, and XAI (Grok)
-- **Configurable Settings**: API keys, temperature, max tokens, model selection
-- **Real-time Status**: Shows connection status and current provider
-- **Error Handling**: Graceful error handling with detailed error messages
-
-### Setup Instructions
-
-1. **Start your FastAPI backend**:
-```bash
-cd /path/to/your/api
-python main.py
-# or
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-2. **Configure the backend URL** (optional):
-Create a `.env.local` file in the dummy-gpt directory:
 ```env
-FASTAPI_BASE_URL=http://localhost:8000
+# Anthropic API Configuration
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# PromptLens API Configuration  
+PROMPTLENS_API_KEY=your_promptlens_api_key_here
+
+# FastAPI Backend Configuration
+FASTAPI_BASE_URL=https://prompt-lens-c4218b9ba45e.herokuapp.com
 ```
 
-3. **Start the Next.js app**:
+### 2. Get Your API Keys
+
+- **Anthropic API Key**: Get from [console.anthropic.com](https://console.anthropic.com/)
+- **PromptLens API Key**: Get from your PromptLens account dashboard
+
+### 3. Install Dependencies
+
 ```bash
-cd dummy-gpt
+npm install
+```
+
+### 4. Run the Development Server
+
+```bash
 npm run dev
 ```
 
-4. **Configure your LLM settings**:
-   - Click the "Settings" button in the chat interface
-   - Select your preferred provider (OpenAI, Anthropic, or XAI)
-   - Enter your API key
-   - Adjust temperature and max tokens as needed
-   - Optionally specify a custom model
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-### API Integration Details
+## Learn More
 
-The app sends requests to your FastAPI backend with this structure:
+To learn more about Next.js, take a look at the following resources:
 
-```typescript
-{
-  message: string,
-  provider: 'openai' | 'anthropic' | 'xai',
-  apiKey: string,
-  userId: string,
-  temperature: number,
-  maxTokens: number,
-  model?: string
-}
-```
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-Your FastAPI backend should respond with:
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-```typescript
-{
-  generated_text: string,
-  provider: string,
-  model_used: string,
-  usage: object,
-  user_id: string
-}
-```
+## Deploy on Vercel
 
-## Project Structure
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-```
-src/
-├── app/
-│   ├── api/chat/route.ts    # API endpoint for chat
-│   ├── globals.css          # Global styles
-│   ├── layout.tsx           # Root layout
-│   └── page.tsx             # Main page
-├── components/
-│   ├── ChatInterface.tsx    # Main chat container
-│   ├── MessageBubble.tsx    # Individual message component
-│   ├── MessageInput.tsx     # Input component
-│   └── MessageList.tsx      # Message list container
-└── types/
-    └── chat.ts              # TypeScript type definitions
-```
-
-## Customization
-
-### Styling
-The app uses Tailwind CSS for styling. You can customize the appearance by modifying the classes in the component files.
-
-### Message Format
-The app expects messages in this format:
-```typescript
-interface Message {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  timestamp: Date;
-}
-```
-
-### API Response Format
-The API expects responses in this format:
-```typescript
-interface ChatResponse {
-  response: string;
-}
-```
-
-## Deployment
-
-To deploy this app:
-
-1. Build the production version:
-```bash
-npm run build
-```
-
-2. Start the production server:
-```bash
-npm start
-```
-
-Or deploy to platforms like Vercel, Netlify, or any other Next.js-compatible hosting service.
-
-## License
-
-MIT License - feel free to use this project for your own needs!
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ChatRequest, ChatResponse } from '@/types/chat';
 
 // Configuration for your FastAPI backend
 const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || "https://prompt-lens-c4218b9ba45e.herokuapp.com";
@@ -9,14 +8,14 @@ const PROMPTLENS_API_KEY = process.env.PROMPTLENS_API_KEY;
 export async function POST(request: NextRequest) {
   try {
     console.log('🚀 Chat API called');
-    const body: ChatRequest = await request.json();
-    console.log('📝 Request body:', body);
-    
-    const { message, userId, temperature, maxTokens, model } = body;
-    // const { message, provider, apiKey, userId, temperature, maxTokens, model } = body; // Commented out provider and apiKey since we use env vars
+    const body = await request.json();
+    const { message, userId = 'default-user', temperature = 0.7, maxTokens = 1000, model = 'claude-3-haiku-20240307' } = body;
+
+    console.log('📝 Message:', message);
+    console.log('👤 User ID:', userId);
 
     if (!message || typeof message !== 'string') {
-      console.log('❌ Message validation failed');
+      console.log('❌ Invalid message');
       return NextResponse.json(
         { error: 'Message is required and must be a string' },
         { status: 400 }
@@ -53,54 +52,40 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         prompt: message,
         provider: 'anthropic', // Only use Anthropic
-        user_id: userId || 'default-user',
+        user_id: userId,
         api_key: ANTHROPIC_API_KEY, // Use environment variable
-        temperature: temperature || 0.7,
-        max_tokens: maxTokens || 1000,
-        model: model || 'claude-3-haiku-20240307', // Default Anthropic model
+        temperature: temperature,
+        max_tokens: maxTokens,
+        model: model,
       }),
     });
 
     console.log('📡 FastAPI response status:', fastApiResponse.status);
 
     if (!fastApiResponse.ok) {
-      const errorData = await fastApiResponse.json().catch(() => ({}));
-      console.log('❌ FastAPI error:', errorData);
-      
-      // If it's an API key error, return a mock response instead
-      if (errorData.detail && errorData.detail.includes('API key')) {
-        console.log('🔑 API key error detected, returning mock response');
-        const mockResponse: ChatResponse = {
-          response: `Mock response: I received your message "${message}". This is a test response since no valid API key was provided. The FastAPI backend is working correctly!`,
-          provider: 'anthropic',
-          model: 'claude-3-haiku-20240307',
-          usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
-        };
-        return NextResponse.json(mockResponse);
-      }
-      
+      const errorText = await fastApiResponse.text();
+      console.log('❌ FastAPI error:', errorText);
       return NextResponse.json(
-        { 
-          error: `FastAPI error: ${errorData.detail || fastApiResponse.statusText}` 
-        },
+        { error: `FastAPI error: ${fastApiResponse.status} - ${errorText}` },
         { status: fastApiResponse.status }
       );
     }
 
-    const fastApiData = await fastApiResponse.json();
-    console.log('✅ FastAPI response data:', fastApiData);
+    const data = await fastApiResponse.json();
+    console.log('✅ FastAPI response received:', data);
 
-    const response: ChatResponse = {
-      response: fastApiData.generated_text,
-      provider: fastApiData.provider,
-      model: fastApiData.model_used,
-      usage: fastApiData.usage,
-    };
+    // Return the response in the format expected by the frontend
+    return NextResponse.json({
+      response: data.generated_text,
+      provider: data.provider,
+      model: data.model_used,
+      usage: data.usage,
+      cached: data.cached || false,
+      similarity_score: data.similarity_score || null,
+    });
 
-    console.log('🎉 Sending response to client:', response);
-    return NextResponse.json(response);
   } catch (error) {
-    console.error('💥 Error in chat API:', error);
+    console.error('💥 Chat API error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
